@@ -478,7 +478,7 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
                                 <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets & Google Drive)</h4>
-                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui secara masif</b> untuk menghindari error URL kosong! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
+                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui secara masif</b> untuk mendukung penghapusan KTP lama! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                                 <i class="fa-regular fa-copy"></i> Salin Kode Baru
@@ -487,8 +487,6 @@
                         <div class="bg-slate-950 p-4 rounded-xl overflow-x-auto custom-scrollbar">
 <pre id="apps-script-code" class="text-emerald-400 text-sm font-mono whitespace-pre-wrap">
 function doPost(e) {
-  // WAJIB: Jika script ini Standalone (terpisah dari sheet), gunakan openById:
-  // const ss = SpreadsheetApp.openById("ID_GOOGLE_SHEET_ANDA");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let result = { status: 'success' };
   
@@ -546,6 +544,19 @@ function uploadToDrive(fileData) {
     folder = DriveApp.createFolder("ERP_KTP_Uploads");
     folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   }
+  
+  // Hapus file lama jika ada (agar Google Drive tidak penuh)
+  if (fileData.oldUrl) {
+    try {
+      const match = fileData.oldUrl.match(/id=([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        DriveApp.getFileById(match[1]).setTrashed(true);
+      }
+    } catch(e) {
+      // Abaikan jika file lama tidak dapat ditemukan
+    }
+  }
+
   const blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.filename);
   const file = folder.createFile(blob);
   return "https://drive.google.com/uc?export=view&id=" + file.getId();
@@ -555,7 +566,7 @@ function setupDatabase(ss) {
   const tables = {
     'Cabang': ['id', 'namaCabang', 'lokasi', 'tipeCuti'],
     'Owner': ['id', 'nama', 'posisi', 'username', 'password'],
-    'Karyawan': ['id', 'nama', 'posisi', 'status', 'gajiPokok', 'tunjangan', 'username', 'password', 'role', 'cabangId', 'noTelp', 'tanggalGabung', 'noRekening', 'jatahCuti', 'ktpUrl'],
+    'Karyawan': ['id', 'nama', 'nik', 'posisi', 'status', 'gajiPokok', 'tunjangan', 'username', 'password', 'role', 'cabangId', 'noTelp', 'tanggalGabung', 'noRekening', 'jatahCuti', 'ktpUrl'],
     'Keuangan': ['id', 'tanggal', 'tipe', 'keterangan', 'nominal', 'statusTransaksi', 'cabangId'],
     'Laporan': ['id', 'waktu', 'judul', 'detail', 'cabangId'],
     'RiwayatPosisi': ['id', 'karyawanId', 'tanggal', 'posisiLama', 'posisiBaru', 'keterangan'],
@@ -1110,6 +1121,85 @@ function deleteDataDynamically(ss, sheetName, id) {
             document.getElementById('btn-confirm-action').onclick = () => { onConfirm(); closeModal(); };
         }
 
+        // FITUR BARU: Lihat KTP di Dalam Aplikasi (In-App Image Viewer)
+        function viewKtp(url) {
+            const html = `
+                <div class="flex justify-center bg-slate-100 p-2 rounded-lg">
+                    <img src="${url}" alt="Foto KTP Karyawan" class="max-w-full max-h-[60vh] rounded-lg shadow-md object-contain">
+                </div>
+                <div class="pt-4 flex justify-end mt-4 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 font-medium text-sm transition-colors shadow-sm">Tutup Preview</button>
+                </div>
+            `;
+            openModal('Preview Dokumen KTP', html);
+        }
+
+        // FITUR BARU: View Detail Karyawan (Profil Card)
+        function openModalDetailKaryawan(id) {
+            const emp = state.karyawan.find(k => k.id === id);
+            if (!emp) return;
+
+            const cabangName = getNamaCabang(emp.cabangId);
+            const totalGaji = formatRupiah(emp.gajiPokok + emp.tunjangan);
+            
+            let ktpHtml = '<div class="text-sm text-slate-500 italic mt-2 bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">Foto KTP belum diunggah.</div>';
+            if (emp.ktpUrl) {
+                ktpHtml = `<img src="${emp.ktpUrl}" alt="KTP Karyawan" class="mt-3 w-full max-w-sm h-auto rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity" onclick="viewKtp('${emp.ktpUrl}')" title="Klik untuk memperbesar gambar">`;
+            }
+
+            const html = `
+                <div class="bg-blue-50 p-6 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-6 items-center md:items-start text-center md:text-left">
+                    <div class="w-24 h-24 rounded-full bg-blue-600 text-white flex items-center justify-center text-4xl font-bold uppercase shadow-lg flex-shrink-0">
+                        ${emp.nama.charAt(0)}
+                    </div>
+                    <div class="flex-1 w-full">
+                        <h2 class="text-2xl font-bold text-slate-800">${emp.nama}</h2>
+                        <p class="text-blue-600 font-medium mb-2">${emp.posisi} — <i class="fa-solid fa-building text-blue-400 mx-1"></i> ${cabangName}</p>
+                        <div class="flex flex-wrap justify-center md:justify-start gap-2 mt-2">
+                            <span class="px-2.5 py-1 text-xs font-medium rounded-full ${emp.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}"><i class="fa-solid fa-circle text-[10px] mr-1"></i>${emp.status}</span>
+                            <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-slate-200 text-slate-700"><i class="fa-solid fa-id-card mr-1"></i> NIK: ${emp.nik || 'Kosong'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Informasi Pribadi & Pekerjaan -->
+                    <div>
+                        <h4 class="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-3"><i class="fa-solid fa-address-book text-blue-500 mr-2"></i> Detail Informasi</h4>
+                        <ul class="space-y-3 text-sm">
+                            <li class="flex flex-col"><span class="text-slate-500 text-xs">No. Telepon / WhatsApp</span> <span class="font-semibold text-slate-800">${emp.noTelp || '-'}</span></li>
+                            <li class="flex flex-col"><span class="text-slate-500 text-xs">Tanggal Bergabung</span> <span class="font-semibold text-slate-800">${formatTgl(emp.tanggalGabung)}</span></li>
+                            <li class="flex flex-col"><span class="text-slate-500 text-xs">Username Akses</span> <span class="font-mono bg-slate-100 px-2 py-0.5 border border-slate-200 rounded inline-block w-fit mt-0.5 text-slate-700">${emp.username || 'Tidak memiliki akses'}</span></li>
+                            <li class="flex flex-col"><span class="text-slate-500 text-xs">Jatah Cuti Tersisa</span> <span class="font-semibold text-slate-800">${emp.jatahCuti} Hari</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Finansial -->
+                    <div>
+                        <h4 class="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-3"><i class="fa-solid fa-wallet text-emerald-500 mr-2"></i> Finansial & Pembayaran</h4>
+                        <ul class="space-y-3 text-sm">
+                            <li class="flex justify-between items-center"><span class="text-slate-500 text-xs">Gaji Pokok</span> <span class="font-semibold text-slate-800">${formatRupiah(emp.gajiPokok)}</span></li>
+                            <li class="flex justify-between items-center"><span class="text-slate-500 text-xs">Tunjangan Khusus</span> <span class="font-semibold text-slate-800">${formatRupiah(emp.tunjangan)}</span></li>
+                            <li class="flex justify-between items-center pt-2 border-t border-slate-100"><span class="text-slate-700 font-bold">Total Take Home Pay</span> <span class="font-bold text-emerald-600 text-base">${totalGaji}</span></li>
+                            <li class="flex flex-col mt-2 pt-2"><span class="text-slate-500 text-xs">Rekening Bank</span> <span class="font-mono bg-slate-50 p-2 rounded border border-slate-200 mt-1 font-semibold text-slate-700 flex items-center gap-2"><i class="fa-solid fa-money-check text-slate-400"></i> ${emp.noRekening || 'Belum diisi'}</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Dokumen KTP -->
+                <div class="mt-6 pt-4 border-t border-slate-100">
+                    <h4 class="font-bold text-slate-800 pb-2"><i class="fa-solid fa-file-image text-amber-500 mr-2"></i> Dokumen Identitas (KTP)</h4>
+                    ${ktpHtml}
+                </div>
+
+                <div class="pt-4 flex justify-end mt-6 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-6 py-2.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 font-bold text-sm transition-colors shadow-md">Tutup Jendela Profil</button>
+                </div>
+            `;
+
+            openModal('Profil & Detail Karyawan', html);
+        }
+
         // --- UTILS FORMATTER ---
         const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
         const formatNumberDots = (angka) => new Intl.NumberFormat('id-ID').format(angka || 0);
@@ -1197,8 +1287,8 @@ function deleteDataDynamically(ss, sheetName, id) {
             ],
             owner: [{ id: 'OWN-1', nama: 'Super Admin', posisi: 'Owner', username: 'admin', password: '123', role: listAksesTersedia.map(f => f.id).join(',') }],
             karyawan: [
-                { id: 'EMP-001', nama: 'Budi Santoso', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12, ktpUrl: '' },
-                { id: 'EMP-002', nama: 'Siti Aminah', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12, ktpUrl: '' }
+                { id: 'EMP-001', nama: 'Budi Santoso', nik: '3171234567890001', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12, ktpUrl: '' },
+                { id: 'EMP-002', nama: 'Siti Aminah', nik: '3171234567890002', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12, ktpUrl: '' }
             ],
             keuangan: [
                  { id: 'TRX-001', tanggal: '2023-10-01', tipe: 'Pemasukan', keterangan: 'Penjualan Produk A', nominal: 15000000, statusTransaksi: 'Selesai', cabangId: 'CAB-001' },
@@ -1457,6 +1547,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <select id="inp-cabang" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none ${!state.isOwner ? 'bg-slate-100 cursor-not-allowed' : ''}" ${!state.isOwner ? 'disabled' : ''}>
                                 ${selectCabangOpts}
                             </select></div>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor KTP (NIK)</label>
+                            <input type="number" id="inp-nik" required placeholder="16 digit angka NIK" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
                             <input type="text" id="inp-nama" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon (WhatsApp)</label>
@@ -1549,6 +1641,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                     const newEmp = {
                         id: generateEmployeeId(), 
                         nama: document.getElementById('inp-nama').value,
+                        nik: document.getElementById('inp-nik').value, // NIK Tambahan
                         posisi: document.getElementById('inp-posisi').value,
                         gajiPokok: Number(document.getElementById('inp-gaji').value.replace(/\./g, '')),
                         tunjangan: Number(document.getElementById('inp-tunj').value.replace(/\./g, '')),
@@ -1621,6 +1714,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <select id="edit-cabang" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none ${!state.isOwner ? 'bg-slate-100 cursor-not-allowed' : ''}" ${!state.isOwner ? 'disabled' : ''}>
                                 ${selectCabangOpts}
                             </select></div>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor KTP (NIK)</label>
+                            <input type="number" id="edit-nik" value="${emp.nik || ''}" required placeholder="16 digit angka NIK" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
                             <input type="text" id="edit-nama" value="${emp.nama}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon (WhatsApp)</label>
@@ -1702,7 +1797,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                         fileDataPayload = {
                             filename: "KTP_UPDATE_" + document.getElementById('edit-nama').value.replace(/\s+/g, '_') + ".jpg",
                             mimeType: "image/jpeg",
-                            base64: base64Data
+                            base64: base64Data,
+                            oldUrl: emp.ktpUrl // INI KUNCINYA: Memberitahu backend ada KTP lama yang harus dihapus!
                         };
                     }
 
@@ -1713,6 +1809,7 @@ function deleteDataDynamically(ss, sheetName, id) {
 
                     emp.cabangId = document.getElementById('edit-cabang').value || emp.cabangId;
                     emp.nama = document.getElementById('edit-nama').value;
+                    emp.nik = document.getElementById('edit-nik').value; // Mengambil NIK yang diedit
                     emp.gajiPokok = Number(document.getElementById('edit-gaji').value.replace(/\./g, ''));
                     emp.tunjangan = Number(document.getElementById('edit-tunj').value.replace(/\./g, ''));
                     emp.status = document.getElementById('edit-status').value;
@@ -2109,7 +2206,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             if (btnAddKaryawan) btnAddKaryawan.style.display = canEdit ? 'flex' : 'none';
 
             const colActionKaryawan = document.getElementById('col-action-karyawan');
-            if (colActionKaryawan) colActionKaryawan.style.display = canEdit ? 'table-cell' : 'none';
+            if (colActionKaryawan) colActionKaryawan.style.display = 'table-cell'; // Kolom aksi selalu tampil untuk button Profil
             const colUsername = document.getElementById('col-username-karyawan');
             if (colUsername) colUsername.style.display = canEdit ? 'table-cell' : 'none';
             const colRole = document.getElementById('col-role-karyawan');
@@ -2165,16 +2262,17 @@ function deleteDataDynamically(ss, sheetName, id) {
                         else if(aksesList.length > 0) { badgeStr = "Staff"; bClass = "bg-blue-100 text-blue-700"; }
                     }
 
-                    // Tampilkan Link Langsung Menuju Gambar di Tabel Karyawan
-                    const ktpLinkHtml = emp.ktpUrl ? `<br/><a href="${emp.ktpUrl}" target="_blank" class="text-[10px] text-blue-500 hover:underline flex items-center gap-1 mt-1"><i class="fa-solid fa-id-card"></i> Lihat Foto KTP</a>` : '';
+                    // Menampilkan tombol "Lihat Foto KTP" yang memanggil In-App Image Viewer
+                    const ktpLinkHtml = emp.ktpUrl ? `<br/><button type="button" onclick="event.stopPropagation(); viewKtp('${emp.ktpUrl}')" class="text-[10px] text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 mt-1 cursor-pointer"><i class="fa-solid fa-image"></i> Lihat Foto KTP</button>` : '';
 
                     return `
-                    <tr class="hover:bg-slate-50 transition-colors group">
-                        <td class="px-6 py-4 flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex justify-center items-center font-bold text-xs uppercase">${emp.nama.charAt(0)}</div>
+                    <tr class="hover:bg-slate-50 transition-colors group cursor-default">
+                        <td class="px-6 py-4 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex justify-center items-center font-bold text-xs uppercase flex-shrink-0">${emp.nama.charAt(0)}</div>
                             <div>
                                 <div class="font-medium">${emp.nama}</div>
-                                <div class="text-xs text-slate-500"><i class="fa-solid fa-phone mt-1"></i> ${emp.noTelp ? String(emp.noTelp).replace(/^'/, '') : '-'}</div>
+                                <div class="text-[10px] text-slate-500 bg-slate-100 inline-block px-1.5 py-0.5 rounded mt-0.5 border border-slate-200 font-mono">NIK: ${emp.nik || '-'}</div>
+                                <div class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-phone"></i> ${emp.noTelp ? String(emp.noTelp).replace(/^'/, '') : '-'}</div>
                                 <div class="text-xs text-emerald-600 mt-0.5"><i class="fa-solid fa-location-dot"></i> ${getNamaCabang(emp.cabangId)}</div>
                             </div>
                         </td>
@@ -2188,10 +2286,13 @@ function deleteDataDynamically(ss, sheetName, id) {
                         <td class="px-6 py-4">
                             <span class="px-2.5 py-1 text-xs font-medium rounded-full ${emp.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${emp.status}</span>
                         </td>
-                        <td class="px-6 py-4 text-right" style="display: ${canEdit ? 'table-cell' : 'none'}">
-                            <button onclick="openModalRiwayatJabatan('${emp.id}')" class="text-amber-500 hover:text-amber-600 transition-colors p-2" title="Histori Jabatan"><i class="fa-solid fa-clock-rotate-left"></i></button>
-                            <button onclick="openModalEditKaryawan('${emp.id}')" class="text-blue-500 hover:text-blue-700 transition-colors p-2" title="Edit Karyawan"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <button onclick="hapusKaryawan('${emp.id}', '${emp.nama}')" class="text-slate-400 hover:text-rose-600 transition-colors p-2" title="Hapus Karyawan"><i class="fa-solid fa-trash"></i></button>
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="openModalDetailKaryawan('${emp.id}')" class="text-blue-500 hover:text-blue-700 transition-colors p-2" title="Lihat Profil Card"><i class="fa-solid fa-id-badge"></i></button>
+                            <span style="display: ${canEdit ? 'inline' : 'none'}">
+                                <button onclick="openModalRiwayatJabatan('${emp.id}')" class="text-amber-500 hover:text-amber-600 transition-colors p-2" title="Histori Jabatan"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                                <button onclick="openModalEditKaryawan('${emp.id}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-2" title="Edit Karyawan"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button onclick="hapusKaryawan('${emp.id}', '${emp.nama}')" class="text-slate-400 hover:text-rose-600 transition-colors p-2" title="Hapus Karyawan"><i class="fa-solid fa-trash"></i></button>
+                            </span>
                         </td>
                     </tr>
                 `}).join('');
