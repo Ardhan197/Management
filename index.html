@@ -38,14 +38,14 @@
 <body class="bg-slate-50 font-sans text-slate-800 antialiased overflow-hidden">
 
     <!-- SCREEN LOGIN -->
-    <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center transition-opacity duration-300">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-100 transition-transform">
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center transition-opacity duration-300 overflow-y-auto py-10">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-100 transition-transform my-auto">
             <div class="text-center mb-8">
                 <div class="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                     <i class="fa-solid fa-building-user text-3xl text-white"></i>
                 </div>
                 <h2 class="text-2xl font-bold text-slate-800">CorpManage ERP</h2>
-                <p id="login-status" class="text-sm text-slate-500 mt-2">Memuat database dari server...</p>
+                <p id="login-status" class="text-sm text-slate-500 mt-2">Memuat database...</p>
             </div>
 
             <div id="login-loading" class="flex justify-center py-4">
@@ -76,7 +76,15 @@
                     Masuk ke Sistem
                 </button>
                 
-                <div id="demo-info-container"></div>
+                <!-- Info Akun Demo -->
+                <div class="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm">
+                    <p class="font-bold text-blue-800 mb-2"><i class="fa-solid fa-circle-info mr-1"></i> Info Login Demo (Mode Lokal):</p>
+                    <ul class="space-y-1 text-blue-700">
+                        <li>Owner: <code class="bg-blue-200 px-1 rounded font-bold">admin</code> / <code class="bg-blue-200 px-1 rounded font-bold">123</code></li>
+                        <li>Manager: <code class="bg-blue-200 px-1 rounded font-bold">budi</code> / <code class="bg-blue-200 px-1 rounded font-bold">123</code></li>
+                        <li>Staff: <code class="bg-blue-200 px-1 rounded font-bold">siti</code> / <code class="bg-blue-200 px-1 rounded font-bold">123</code></li>
+                    </ul>
+                </div>
             </form>
         </div>
     </div>
@@ -101,7 +109,7 @@
             </div>
 
             <nav class="flex-1 overflow-y-auto custom-scrollbar py-6 px-4 space-y-2">
-                <a href="#" onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl bg-blue-600 text-white transition-colors" style="display: none;">
+                <a href="#" onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl bg-blue-600 text-white transition-colors">
                     <i class="fa-solid fa-chart-pie w-5 text-center"></i>
                     <span class="font-medium">Dashboard</span>
                 </a>
@@ -117,7 +125,6 @@
                     <i class="fa-solid fa-wallet w-5 text-center"></i>
                     <span class="font-medium">Keuangan Perusahaan</span>
                 </a>
-                <!-- Laporan hanya untuk owner -->
                 <a href="#" onclick="navigate('laporan')" id="nav-laporan" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" style="display: none;">
                     <i class="fa-solid fa-clipboard-list w-5 text-center"></i>
                     <span class="font-medium">Aktivitas Laporan</span>
@@ -149,7 +156,7 @@
                     <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" title="Toggle Sidebar">
                         <i class="fa-solid fa-bars text-xl"></i>
                     </button>
-                    <h2 id="header-title" class="text-xl font-bold text-slate-800 hidden sm:block">Memuat...</h2>
+                    <h2 id="header-title" class="text-xl font-bold text-slate-800 hidden sm:block">Dashboard & Statistik</h2>
                 </div>
                 <div class="flex items-center gap-4">
                     
@@ -164,12 +171,12 @@
                     </div>
 
                     <!-- Indikator Live Sync (Real-time) -->
-                    <div id="live-sync-indicator" class="hidden items-center gap-2 px-2 py-1 bg-slate-100 rounded-lg" title="Sistem terhubung dan tersinkronisasi secara langsung">
+                    <div id="live-sync-indicator" class="hidden items-center gap-2 px-2 py-1 bg-slate-100 rounded-lg" title="Sistem tersinkronisasi">
                         <span class="relative flex h-2.5 w-2.5">
                           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                           <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                         </span>
-                        <span class="text-xs font-semibold text-slate-500 hidden sm:block">Live</span>
+                        <span class="text-xs font-semibold text-slate-500 hidden sm:block" id="sync-label">Sync</span>
                     </div>
 
                     <button class="relative p-2 text-slate-400 hover:text-slate-600 transition-colors" onclick="showToast('Sistem Keamanan Aktif!', 'info')">
@@ -182,7 +189,7 @@
             <main class="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50 relative custom-scrollbar">
                 
                 <!-- VIEW: DASHBOARD -->
-                <div id="view-dashboard" class="view-section fade-in hidden">
+                <div id="view-dashboard" class="view-section fade-in">
                     
                     <!-- DASHBOARD OWNER / ADMIN -->
                     <div id="dashboard-admin-view">
@@ -227,13 +234,13 @@
 
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div id="finance-chart-wrapper" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 transition-all">
-                                <h3 class="text-lg font-bold text-slate-800 mb-4">Statistik Keuangan Bulan Ini</h3>
+                                <h3 class="text-lg font-bold text-slate-800 mb-4">Statistik Keuangan</h3>
                                 <div class="w-full h-[300px] relative">
                                     <canvas id="financeChart"></canvas>
                                 </div>
                             </div>
                             <div id="activity-wrapper" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all">
-                                <h3 class="text-lg font-bold text-slate-800 mb-4">Aktivitas Sistem Laporan</h3>
+                                <h3 class="text-lg font-bold text-slate-800 mb-4">Aktivitas Sistem Terbaru</h3>
                                 <div class="space-y-4" id="container-aktivitas">
                                     <p class="text-sm text-slate-500 text-center py-4">Belum ada aktivitas terbaru.</p>
                                 </div>
@@ -384,7 +391,7 @@
                     <!-- STATUS DATABASE -->
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6 p-6">
                         <h4 class="font-bold text-slate-800"><i class="fa-solid fa-database text-amber-500 mr-2"></i> Konfigurasi Database API</h4>
-                        <p class="text-sm text-slate-500 mt-1 mb-3">Sistem ini mengandalkan Google Apps Script (GAS) sebagai backend Database Spreadsheet.</p>
+                        <p class="text-sm text-slate-500 mt-1 mb-3">Isi variabel <b>GAS_URL</b> di kodingan jika ingin menggunakan backend Google Sheets. Saat ini aplikasi menggunakan <b>Mode Offline (Local Storage)</b>.</p>
                         <div class="bg-slate-50 border border-slate-200 p-3 rounded-lg flex items-center gap-2 overflow-hidden">
                             <i class="fa-solid fa-link text-slate-400"></i>
                             <span id="display-gas-url" class="font-mono text-sm text-blue-600 font-semibold truncate">[ URL Belum Dikonfigurasi ]</span>
@@ -435,7 +442,7 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
                                 <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets)</h4>
-                                <p class="text-sm text-slate-400">Salin dan tempel kode ini ke Google Apps Script Anda. <b>WAJIB LAKUKAN NEW DEPLOYMENT (Web App)</b>.</p>
+                                <p class="text-sm text-slate-400">Jika ingin beralih ke cloud database, salin dan tempel kode ini ke Google Apps Script Anda. <b>WAJIB LAKUKAN NEW DEPLOYMENT</b>.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                                 <i class="fa-regular fa-copy"></i> Salin Kode
@@ -668,11 +675,13 @@ function deleteDataDynamically(ss, sheetName, id) {
          * ==========================================
          * KONFIGURASI DATABASE GOOGLE SHEETS
          * ==========================================
+         * Kosongkan URL jika ingin menggunakan LocalStorage (Offline Mode).
+         * Jika diisi, akan otomatis terhubung ke cloud Spreadsheet.
          */
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbysOgLAmryQF8GJNkxR-sQELEjDnrSeAisVJn8JRUIiuIJgnfYk9Q7dHA-zXaEz_tbp/exec'; 
 
         /**
-         * DAFTAR FITUR & AKSES CHECKLIST (Hak Akses Laporan Dihapus untuk Karyawan)
+         * DAFTAR FITUR & AKSES CHECKLIST
          */
         const listAksesTersedia = [
             { id: 'dashboard', label: 'Dashboard & Statistik' },
@@ -684,6 +693,67 @@ function deleteDataDynamically(ss, sheetName, id) {
         ];
 
         let backgroundSyncInterval = null; 
+
+        // Fungsi Navigasi Tab Sidebar (Sebelumnya Hilang)
+        function navigate(viewId, bypassState = false) {
+            if (!viewId) return;
+            if (state.currentView === viewId && !bypassState) return;
+
+            // Sembunyikan semua konten view
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+
+            // Hapus status aktif dari semua menu nav
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('bg-blue-600', 'text-white');
+                el.classList.add('text-slate-300');
+            });
+
+            // Tampilkan view yang dipilih
+            const viewEl = document.getElementById('view-' + viewId);
+            if (viewEl) viewEl.classList.remove('hidden');
+
+            // Set menu nav menjadi aktif
+            const navEl = document.getElementById('nav-' + viewId);
+            if (navEl) {
+                navEl.classList.add('bg-blue-600', 'text-white');
+                navEl.classList.remove('text-slate-300');
+            }
+
+            // Update Judul Header
+            const titles = {
+                'dashboard': 'Dashboard & Analitik',
+                'karyawan': 'Manajemen Karyawan',
+                'gaji': 'Penggajian (Payroll)',
+                'keuangan': 'Arus Kas Keuangan',
+                'laporan': 'Log & Aktivitas Sistem',
+                'pengaturan': 'Pengaturan & Sistem'
+            };
+            document.getElementById('header-title').innerText = titles[viewId] || 'CorpManage ERP';
+
+            state.currentView = viewId;
+
+            // Tutup sidebar di versi mobile setelah diklik
+            if (window.innerWidth < 1024 && state.isSidebarOpen) {
+                toggleSidebar();
+            }
+        }
+
+        // Fungsi Membuka / Menutup Sidebar di Mobile (Sebelumnya Hilang)
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            state.isSidebarOpen = !state.isSidebarOpen;
+
+            if (state.isSidebarOpen) {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.style.opacity = '1', 10);
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
 
         function getAccessArray(roleStr) {
             if (!roleStr) return [];
@@ -746,7 +816,6 @@ function deleteDataDynamically(ss, sheetName, id) {
             
             errorBox.classList.add('hidden');
             
-            // Pencocokan SANGAT KETAT
             let user = state.owner.find(u => String(u.username) === String(un) && String(u.password) === String(pw));
             if(user) {
                 state.isOwner = true;
@@ -838,7 +907,6 @@ function deleteDataDynamically(ss, sheetName, id) {
             if (!user) return;
             const arrAkses = getAccessArray(user.role);
 
-            // Hide/Show Standard Menus
             ['dashboard', 'karyawan', 'gaji', 'keuangan', 'pengaturan'].forEach(view => {
                 const navItem = document.getElementById(`nav-${view}`);
                 if (navItem) {
@@ -850,11 +918,9 @@ function deleteDataDynamically(ss, sheetName, id) {
                 }
             });
 
-            // Laporan Menu is 100% EXCLUSIVE to Owner
             const navLaporan = document.getElementById('nav-laporan');
             if (navLaporan) navLaporan.style.display = state.isOwner ? 'flex' : 'none';
 
-            // Cards Dashboard
             document.getElementById('card-saldo').style.display = arrAkses.includes('keuangan') ? 'flex' : 'none';
             document.getElementById('card-gaji').style.display = arrAkses.includes('gaji') ? 'flex' : 'none';
             document.getElementById('card-karyawan').style.display = arrAkses.includes('karyawan') ? 'flex' : 'none';
@@ -869,7 +935,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                     activityWrapper.style.display = 'block';
                     chartWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 transition-all";
                 } else {
-                    activityWrapper.style.display = 'none'; // Sembunyikan global activity
+                    activityWrapper.style.display = 'none';
                     chartWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-3 transition-all";
                 }
             } else {
@@ -887,7 +953,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             const user = getCurrentUser();
             const arrAkses = getAccessArray(user ? user.role : '');
             if (!arrAkses.includes('can_edit')) {
-                showToast('Akses ditolak: Anda tidak memiliki izin untuk merubah data.', 'error');
+                showToast('Akses ditolak: Anda tidak memiliki izin merubah data.', 'error');
                 return false;
             }
             return true;
@@ -897,13 +963,13 @@ function deleteDataDynamically(ss, sheetName, id) {
             state.activeCabangFilter = cabangId;
             renderData();
             updateChart();
-            showToast('Tampilan difilter berdasarkan cabang yang dipilih.', 'info');
+            showToast('Tampilan difilter berdasarkan cabang.', 'info');
         }
 
         function toggleMaintenance(isActive) {
             if(!state.isOwner) {
                 document.getElementById('toggle-maintenance').checked = !isActive;
-                return showToast('Hanya Owner yang dapat mengubah mode Maintenance', 'error');
+                return showToast('Hanya Owner yang dapat mengubah Mode Maintenance', 'error');
             }
             
             state.isMaintenance = isActive;
@@ -979,7 +1045,6 @@ function deleteDataDynamically(ss, sheetName, id) {
         };
         const generateId = (prefix) => prefix + '-' + Math.random().toString(36).substr(2, 6).toUpperCase();
         
-        // Fungsi otomatis menangani angka awalan 0 agar tidak hilang di Google Sheets
         const handleLeadingZero = (val) => {
             if (!val) return '';
             let strVal = String(val).trim();
@@ -1000,19 +1065,72 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         const getWaktuSekarang = () => { const d = new Date(); let hours = d.getHours(); let ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12 || 12; const mins = d.getMinutes().toString().padStart(2, '0'); return `Hari ini, ${hours}:${mins} ${ampm}`; };
 
-        // --- FETCH DB & BACKGROUND SYNC ---
+        // --- FETCH DB LOKAL/CLOUD & BACKGROUND SYNC ---
+        
+        // Data Contoh Awal (Hanya dipanggil jika Local Storage kosong dan GAS_URL kosong)
+        const initialDummyData = {
+            sistem: [{ id: 'SYS-1', kunci: 'maintenance_mode', nilai: 'false' }],
+            cabang: [
+                { id: 'CAB-001', namaCabang: 'Cabang Pusat Jakarta', lokasi: 'Jakarta Pusat', tipeCuti: 'Tahunan' },
+                { id: 'CAB-002', namaCabang: 'Cabang Bandung', lokasi: 'Bandung', tipeCuti: 'Bulanan' }
+            ],
+            owner: [{ id: 'OWN-1', nama: 'Super Admin', posisi: 'Owner', username: 'admin', password: '123', role: listAksesTersedia.map(f => f.id).join(',') }],
+            karyawan: [
+                { id: 'EMP-001', nama: 'Budi Santoso', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12 },
+                { id: 'EMP-002', nama: 'Siti Aminah', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12 }
+            ],
+            keuangan: [
+                 { id: 'TRX-001', tanggal: '2023-10-01', tipe: 'Pemasukan', keterangan: 'Penjualan Produk A', nominal: 15000000, statusTransaksi: 'Selesai', cabangId: 'CAB-001' },
+                 { id: 'TRX-002', tanggal: '2023-10-05', tipe: 'Pengeluaran', keterangan: 'Listrik & Air', nominal: 2000000, statusTransaksi: 'Selesai', cabangId: 'CAB-001' }
+            ],
+            laporan: [
+                { id: 'LOG-001', waktu: getWaktuSekarang(), judul: 'Sistem Dimulai', detail: 'Sistem diakses pertama kali (Local Database).', cabangId: '' }
+            ],
+            riwayatposisi: []
+        };
+
+        // Fungsi Super Pintar: Mendukung Cloud (GAS) maupun Offline (Local Storage)
         async function sendToSheet(action, sheetName, data = null) {
-            if (!GAS_URL) return null; 
-            try {
-                const response = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, sheetName, data }) });
-                return await response.json();
-            } catch (err) { console.error("Err DB:", err); return null; }
+            if (GAS_URL) {
+                try {
+                    const response = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, sheetName, data }) });
+                    return await response.json();
+                } catch (err) { console.error("Err DB:", err); return null; }
+            } else {
+                // MODE OFFLINE (LOCAL STORAGE FALLBACK) - Memastikan aplikasi 100% jalan tanpa disetup cloud.
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        let db = JSON.parse(localStorage.getItem('corp_db')) || initialDummyData;
+                        let sName = sheetName.toLowerCase();
+                        
+                        if (action === 'getData') {
+                            resolve({ status: 'success', data: db });
+                        } else if (action === 'addData') {
+                            if(!db[sName]) db[sName] = [];
+                            db[sName].unshift(data); 
+                            localStorage.setItem('corp_db', JSON.stringify(db));
+                            resolve({ status: 'success' });
+                        } else if (action === 'updateData') {
+                            if(db[sName]) {
+                                const idx = db[sName].findIndex(item => item.id === data.id);
+                                if(idx !== -1) db[sName][idx] = data;
+                            }
+                            localStorage.setItem('corp_db', JSON.stringify(db));
+                            resolve({ status: 'success' });
+                        } else if (action === 'deleteData') { 
+                            if(db[sName]) {
+                                db[sName] = db[sName].filter(item => item.id !== data);
+                            }
+                            localStorage.setItem('corp_db', JSON.stringify(db));
+                            resolve({ status: 'success' });
+                        }
+                    }, 300); // Simulasi delay jaringan
+                });
+            }
         }
 
         // Fungsi Sinkronisasi Latar Belakang (Secara Diam-diam)
         async function silentBackgroundFetch() {
-            if (!GAS_URL) return;
-            
             try {
                 const result = await sendToSheet('getData', '');
                 
@@ -1043,14 +1161,12 @@ function deleteDataDynamically(ss, sheetName, id) {
 
                     // Validasi Keamanan Latar Belakang Saat User Sedang Login
                     if (state.loggedInUserId) {
-                        // 1. Auto-Logout jika Maintenance dihidupkan Owner
                         if (!state.isOwner && !wasMaintenance && state.isMaintenance) {
                             showToast('Sistem memasuki mode perbaikan. Anda dikeluarkan otomatis.', 'warning');
-                            logout(true); // Paksa logout tanpa dialog konfirmasi
+                            logout(true);
                             return;
                         }
 
-                        // 2. Auto-Logout jika Akun Karyawan Dihapus / Username Diganti Admin
                         const currentUser = getCurrentUser();
                         if (!currentUser) {
                             showToast('Sesi kedaluwarsa: Akun tidak ditemukan di database.', 'error');
@@ -1058,7 +1174,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                             return;
                         }
 
-                        // Render ulang UI secara diam-diam tanpa loader
                         renderData();
                         updateChart();
                     }
@@ -1069,40 +1184,8 @@ function deleteDataDynamically(ss, sheetName, id) {
         }
 
         async function loadDatabaseOnStart() {
-            if (!GAS_URL) {
-                // MODE KETAT: TIDAK ADA DATA DUMMY / LOKAL. WAJIB DATABASE.
-                state.isMaintenance = false;
-                state.cabang = []; 
-                state.owner = []; 
-                state.karyawan = []; 
-                state.keuangan = []; 
-                state.laporan = []; 
-                state.riwayatPosisi = []; 
-                state.sistem = [];
-
-                const loginStatus = document.getElementById('login-status');
-                loginStatus.innerHTML = "<span class='text-rose-600 font-bold'><i class='fa-solid fa-shield-halved'></i> Sistem Keamanan Ketat Aktif</span>";
-                document.getElementById('login-loading').classList.add('hidden');
-                
-                const formContainer = document.getElementById('login-form-container');
-                formContainer.classList.remove('hidden');
-                
-                // Kunci form login, ganti dengan peringatan keamanan
-                formContainer.innerHTML = `
-                    <div class="text-sm text-center bg-rose-50 text-rose-700 p-5 rounded-xl border border-rose-200 shadow-sm flex flex-col items-center">
-                        <i class="fa-solid fa-lock text-3xl mb-3 text-rose-500"></i>
-                        <b class="text-base">Akses Login Ditangguhkan</b>
-                        <p class="mt-2 text-rose-600">Sesuai dengan kebijakan keamanan yang ketat, aplikasi tidak mengizinkan akses lokal (tanpa database).</p>
-                        <p class="mt-3 text-xs bg-white p-2 border border-rose-100 rounded-lg w-full text-left text-slate-700">
-                            <i class="fa-solid fa-circle-info text-blue-500 mr-1"></i> <b>Tindakan Diperlukan:</b><br/>
-                            Anda wajib mengisi variabel <code class="bg-slate-100 px-1 rounded text-rose-500">GAS_URL</code> di dalam kode sumber dengan URL Google Apps Script Anda yang valid untuk dapat memuat data dan melakukan login.
-                        </p>
-                    </div>
-                `;
-                return;
-            }
-
-            document.getElementById('login-status').innerText = "Menyinkronkan data aman dengan Server...";
+            document.getElementById('login-status').innerText = GAS_URL ? "Menyinkronkan data dengan Cloud Server..." : "Memuat Database Lokal (Offline Mode)...";
+            
             const result = await sendToSheet('getData', '');
             
             if (result && result.status === 'success' && result.data) {
@@ -1130,11 +1213,17 @@ function deleteDataDynamically(ss, sheetName, id) {
                 
                 document.getElementById('login-loading').classList.add('hidden');
                 document.getElementById('login-form-container').classList.remove('hidden');
-                document.getElementById('login-status').innerText = "Sinkronisasi berhasil. Silakan Login.";
+                document.getElementById('login-status').innerText = GAS_URL ? "Sinkronisasi berhasil. Silakan Login." : "Database Lokal Aktif. Silakan Login.";
 
-                // Tampilkan indikator Live Sync di Header saat terhubung
+                // Tampilkan indikator Sync
                 document.getElementById('live-sync-indicator').classList.remove('hidden');
                 document.getElementById('live-sync-indicator').classList.add('flex');
+                if(!GAS_URL) {
+                    document.getElementById('sync-label').innerText = "Local";
+                    document.getElementById('sync-label').classList.replace('text-slate-500', 'text-amber-500');
+                    document.querySelector('.bg-emerald-400').classList.replace('bg-emerald-400', 'bg-amber-400');
+                    document.querySelector('.bg-emerald-500').classList.replace('bg-emerald-500', 'bg-amber-500');
+                }
 
                 // MULAI SINKRONISASI LATAR BELAKANG SETIAP 10 DETIK
                 if (!backgroundSyncInterval) {
@@ -1145,7 +1234,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                 document.getElementById('login-status').innerText = "Gagal memuat database.";
                 document.getElementById('login-loading').classList.add('hidden');
                 document.getElementById('login-form-container').classList.remove('hidden');
-                showToast('Gagal memuat database. Periksa URL Apps Script.', 'error');
+                showToast('Gagal memuat database.', 'error');
             }
         }
 
@@ -1223,7 +1312,6 @@ function deleteDataDynamically(ss, sheetName, id) {
             const formHTML = `
                 <form id="form-karyawan" class="space-y-4">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <!-- Bagian Kiri: Profil & Personal -->
                         <div class="space-y-3">
                             <h4 class="font-bold text-slate-700 border-b border-slate-100 pb-2"><i class="fa-solid fa-address-card text-blue-600 mr-2"></i> Profil & Personal</h4>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Penempatan Cabang</label>
@@ -1240,9 +1328,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <input type="date" id="inp-joindate" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                         </div>
                         
-                        <!-- Bagian Kanan: Finansial & Keamanan -->
                         <div class="space-y-4">
-                            <!-- Finansial -->
                             <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                                 <h4 class="font-bold text-slate-700 border-b border-slate-200 pb-2"><i class="fa-solid fa-wallet text-emerald-600 mr-2"></i> Finansial & Benefit</h4>
                                 <div class="grid grid-cols-2 gap-3">
@@ -1257,7 +1343,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                                 <input type="number" id="inp-cuti" value="12" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             </div>
 
-                            <!-- Akses & Keamanan -->
                             <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                                 <h4 class="font-bold text-slate-700 border-b border-slate-200 pb-2"><i class="fa-solid fa-lock text-rose-500 mr-2"></i> Akses & Keamanan</h4>
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Status Pegawai</label>
@@ -1342,7 +1427,6 @@ function deleteDataDynamically(ss, sheetName, id) {
             const formHTML = `
                 <form id="form-edit-karyawan" class="space-y-4">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <!-- Bagian Kiri: Profil & Personal -->
                         <div class="space-y-3">
                             <h4 class="font-bold text-slate-700 border-b border-slate-100 pb-2"><i class="fa-solid fa-address-card text-blue-600 mr-2"></i> Profil & Personal</h4>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Penempatan Cabang</label>
@@ -1360,9 +1444,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <input type="date" id="edit-joindate" value="${safeJoinDate}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                         </div>
 
-                        <!-- Bagian Kanan: Finansial & Keamanan -->
                         <div class="space-y-4">
-                            <!-- Finansial -->
                             <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                                 <h4 class="font-bold text-slate-700 border-b border-slate-200 pb-2"><i class="fa-solid fa-wallet text-emerald-600 mr-2"></i> Finansial & Benefit</h4>
                                 <div class="grid grid-cols-2 gap-3">
@@ -1377,7 +1459,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                                 <input type="number" id="edit-cuti" value="${emp.jatahCuti !== undefined ? emp.jatahCuti : 12}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             </div>
 
-                            <!-- Akses -->
                             <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                                 <h4 class="font-bold text-slate-700 border-b border-slate-200 pb-2"><i class="fa-solid fa-lock text-rose-500 mr-2"></i> Akses & Keamanan</h4>
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Status Pegawai</label>
@@ -1625,7 +1706,6 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         function updateDashboardStats() {
             if (state.isOwner) {
-                // Tampilan untuk Owner (Total Keuangan / Karyawan Perusahaan)
                 document.getElementById('dashboard-admin-view').classList.remove('hidden');
                 document.getElementById('dashboard-karyawan-view').classList.add('hidden');
 
@@ -1643,7 +1723,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 document.getElementById('dash-total-gaji').innerText = formatRupiah(totalGaji);
                 document.getElementById('dash-total-laporan').innerText = fLaporan.length;
             } else {
-                // Tampilan Khusus Karyawan (Profil Pribadi & Sisa Cuti)
                 document.getElementById('dashboard-admin-view').classList.add('hidden');
                 document.getElementById('dashboard-karyawan-view').classList.remove('hidden');
 
@@ -1658,11 +1737,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                     document.getElementById('label-sisa-cuti').innerText = `Sisa Cuti ${tipeCuti}`;
                     
                     document.getElementById('karyawan-dash-cuti').innerText = user.jatahCuti !== undefined ? user.jatahCuti : 0;
-
-                    // Kehadiran sederhana
                     document.getElementById('karyawan-dash-hadir').innerText = user.status === 'Aktif' ? 'Terjadwal' : 'Sedang Cuti';
 
-                    // Rekap Riwayat Aktivitas Pribadi
                     const contAkt = document.getElementById('karyawan-dash-aktivitas');
                     const riwayat = state.laporan.filter(l => String(l.detail || '').includes(user.id) || String(l.detail || '').includes(user.nama)).slice(0, 5);
                     
@@ -1789,8 +1865,8 @@ function deleteDataDynamically(ss, sheetName, id) {
 
             const displayGas = document.getElementById('display-gas-url');
             if (displayGas) {
-                displayGas.innerText = GAS_URL ? GAS_URL : "[ URL Apps Script Belum Dikonfigurasi - Menjalankan Mode Lokal ]";
-                if (!GAS_URL) displayGas.classList.add('text-amber-600');
+                displayGas.innerText = GAS_URL ? GAS_URL : "[ URL Kosong: Menjalankan Database Offline Lokal ]";
+                if (!GAS_URL) displayGas.classList.replace('text-blue-600', 'text-amber-600');
             }
 
             const userAktif = getCurrentUser();
@@ -1820,7 +1896,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             const tbodyCabang = document.getElementById('table-cabang-body');
             if(tbodyCabang) {
                 if (state.cabang.length === 0) {
-                    tbodyCabang.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-medium">Belum ada data cabang. <br/><span class="text-xs font-normal text-rose-500">Jika Anda menggunakan Google Sheets, pastikan sudah melakukan "New Deployment" pada Apps Script Anda!</span></td></tr>`;
+                    tbodyCabang.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-medium">Belum ada data cabang.</td></tr>`;
                 } else {
                     tbodyCabang.innerHTML = state.cabang.map(c => `
                         <tr class="hover:bg-slate-50 transition-colors">
@@ -1937,7 +2013,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                     let judulStr = String(log.judul || '');
                     let actionBtn = '';
                     
-                    // Parsing Khusus untuk Log Cuti
                     if (displayDetail.startsWith('REQ_CUTI|')) {
                         const parts = displayDetail.split('|');
                         const empId = parts[1];
@@ -2038,7 +2113,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 }
             });
 
-            // Deteksi jika jendela aplikasi dibuka kembali (Resume) untuk Sinkronisasi Instan
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === 'visible' && GAS_URL) {
                     silentBackgroundFetch();
