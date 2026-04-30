@@ -77,7 +77,7 @@
                 </button>
                 
                 <!-- Info Akun Demo -->
-                <div class="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm">
+                <div id="demo-login-info" class="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm">
                     <p class="font-bold text-blue-800 mb-2"><i class="fa-solid fa-circle-info mr-1"></i> Info Login Demo (Mode Lokal):</p>
                     <ul class="space-y-1 text-blue-700">
                         <li>Owner: <code class="bg-blue-200 px-1 rounded font-bold">admin</code> / <code class="bg-blue-200 px-1 rounded font-bold">123</code></li>
@@ -112,6 +112,10 @@
                 <a href="#" onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl bg-blue-600 text-white transition-colors">
                     <i class="fa-solid fa-chart-pie w-5 text-center"></i>
                     <span class="font-medium">Dashboard</span>
+                </a>
+                <a href="#" onclick="navigate('cuti')" id="nav-cuti" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                    <i class="fa-solid fa-calendar-alt w-5 text-center"></i>
+                    <span class="font-medium">Cuti & Izin</span>
                 </a>
                 <a href="#" onclick="navigate('karyawan')" id="nav-karyawan" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" style="display: none;">
                     <i class="fa-solid fa-users w-5 text-center"></i>
@@ -179,6 +183,15 @@
                         <span class="text-xs font-semibold text-slate-500 hidden sm:block" id="sync-label">Sync</span>
                     </div>
 
+                    <!-- Notifikasi In-App -->
+                    <button class="relative p-2 text-slate-400 hover:text-blue-600 transition-colors" onclick="openModalNotifikasi()" title="Notifikasi Sistem">
+                        <i class="fa-solid fa-bell text-xl"></i>
+                        <span id="notif-badge" class="hidden absolute top-1 right-1 flex h-3 w-3">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+                        </span>
+                    </button>
+
                     <button class="relative p-2 text-slate-400 hover:text-slate-600 transition-colors" onclick="showToast('Sistem Keamanan Aktif!', 'info')">
                         <i class="fa-solid fa-shield-halved text-xl"></i>
                         <span class="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
@@ -188,6 +201,24 @@
 
             <main class="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50 relative custom-scrollbar">
                 
+                <!-- VIEW: CUTI -->
+                <div id="view-cuti" class="view-section hidden fade-in">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Manajemen Cuti & Izin</h3>
+                            <p class="text-sm text-slate-500">Kelola pengajuan cuti dan riwayat izin karyawan.</p>
+                        </div>
+                        <button id="btn-ajukan-cuti-page" onclick="openModalCuti()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 shadow-sm flex-shrink-0">
+                            <i class="fa-solid fa-calendar-plus"></i> Ajukan Cuti Baru
+                        </button>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                        <div class="space-y-4" id="container-cuti-page">
+                            <!-- List Cuti injected here -->
+                        </div>
+                    </div>
+                </div>
+
                 <!-- VIEW: DASHBOARD -->
                 <div id="view-dashboard" class="view-section fade-in">
                     
@@ -240,7 +271,12 @@
                                 </div>
                             </div>
                             <div id="activity-wrapper" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all">
-                                <h3 class="text-lg font-bold text-slate-800 mb-4">Aktivitas Sistem Terbaru</h3>
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-lg font-bold text-slate-800">Aktivitas Sistem Terbaru</h3>
+                                    <button id="btn-buat-tugas" onclick="openModalTugas()" class="hidden bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-blue-100 shadow-sm items-center gap-2">
+                                        <i class="fa-solid fa-bullhorn"></i> <span class="hidden sm:inline">Buat Info</span>
+                                    </button>
+                                </div>
                                 <div class="space-y-4" id="container-aktivitas">
                                     <p class="text-sm text-slate-500 text-center py-4">Belum ada aktivitas terbaru.</p>
                                 </div>
@@ -689,6 +725,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             { id: 'gaji', label: 'Proses Penggajian' },
             { id: 'keuangan', label: 'Arus Kas Keuangan' },
             { id: 'pengaturan', label: 'Pengaturan Database & Cabang' },
+            { id: 'manage_cuti', label: 'Persetujuan Cuti (Approve/Reject)' },
             { id: 'can_edit', label: 'Izin Edit/Hapus Data' }
         ];
 
@@ -698,6 +735,12 @@ function deleteDataDynamically(ss, sheetName, id) {
         function navigate(viewId, bypassState = false) {
             if (!viewId) return;
             if (state.currentView === viewId && !bypassState) return;
+
+            // Proteksi ekstra: Laporan/Aktivitas Sistem HANYA untuk Owner
+            if (viewId === 'laporan' && !state.isOwner) {
+                showToast('Akses Ditolak: Hanya Owner yang dapat melihat log aktivitas aplikasi.', 'error');
+                return;
+            }
 
             // Sembunyikan semua konten view
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
@@ -722,6 +765,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             // Update Judul Header
             const titles = {
                 'dashboard': 'Dashboard & Analitik',
+                'cuti': 'Manajemen Cuti & Izin',
                 'karyawan': 'Manajemen Karyawan',
                 'gaji': 'Penggajian (Payroll)',
                 'keuangan': 'Arus Kas Keuangan',
@@ -1184,6 +1228,12 @@ function deleteDataDynamically(ss, sheetName, id) {
         }
 
         async function loadDatabaseOnStart() {
+            // Sembunyikan Info Demo Jika Menggunakan URL Cloud
+            const demoInfo = document.getElementById('demo-login-info');
+            if (GAS_URL && demoInfo) {
+                demoInfo.classList.add('hidden');
+            }
+
             document.getElementById('login-status').innerText = GAS_URL ? "Menyinkronkan data dengan Cloud Server..." : "Memuat Database Lokal (Offline Mode)...";
             
             const result = await sendToSheet('getData', '');
@@ -1783,6 +1833,16 @@ function deleteDataDynamically(ss, sheetName, id) {
             const user = getCurrentUser();
             if(!user || state.isOwner) return;
 
+            // Pengecekan: Apakah user masih memiliki cuti yang berstatus PENDING
+            const pendingCuti = state.laporan.find(log => 
+                log.judul.includes('PENDING') && 
+                String(log.detail).startsWith('REQ_CUTI|' + user.id)
+            );
+
+            if (pendingCuti) {
+                return showToast('Maaf, Anda masih memiliki pengajuan cuti yang menunggu persetujuan (PENDING).', 'warning');
+            }
+
             const formHTML = `
                 <form id="form-ajukan-cuti" class="space-y-4">
                     <div>
@@ -1892,6 +1952,13 @@ function deleteDataDynamically(ss, sheetName, id) {
             const fKaryawan = getFilteredData(state.karyawan);
             const fKeuangan = getFilteredData(state.keuangan);
             const fLaporan = getFilteredData(state.laporan);
+
+            // Update Notification Badge
+            updateNotifBadge();
+
+            // Toggle Tugas Button
+            const btnTugas = document.getElementById('btn-buat-tugas');
+            if (btnTugas) btnTugas.style.display = state.isOwner ? 'flex' : 'none';
 
             const tbodyCabang = document.getElementById('table-cabang-body');
             if(tbodyCabang) {
@@ -2062,6 +2129,211 @@ function deleteDataDynamically(ss, sheetName, id) {
                     </div>
                 `}).join('');
             }
+
+            const contCutiPage = document.getElementById('container-cuti-page');
+            if (contCutiPage) {
+                const canManageCuti = state.isOwner || userAksesArray.includes('manage_cuti');
+                let cutiList = state.laporan.filter(l => String(l.detail).startsWith('REQ_CUTI|'));
+                
+                if (state.activeCabangFilter !== 'ALL') {
+                    cutiList = cutiList.filter(l => l.cabangId === state.activeCabangFilter || !l.cabangId);
+                }
+
+                if (!canManageCuti && userAktif) {
+                    cutiList = cutiList.filter(l => String(l.detail).includes('|' + userAktif.id + '|'));
+                }
+
+                const btnAjukan = document.getElementById('btn-ajukan-cuti-page');
+                if (btnAjukan) btnAjukan.style.display = state.isOwner ? 'none' : 'flex';
+
+                if (cutiList.length === 0) {
+                    contCutiPage.innerHTML = `<p class="text-sm text-slate-500 text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">Belum ada data pengajuan cuti.</p>`;
+                } else {
+                    contCutiPage.innerHTML = cutiList.map(log => {
+                        let displayDetail = String(log.detail || '');
+                        let judulStr = String(log.judul || '');
+                        let actionBtn = '';
+                        
+                        const parts = displayDetail.split('|');
+                        const empId = parts[1];
+                        const durasi = parts[2];
+                        const textAlasan = parts[3];
+
+                        if (canManageCuti && judulStr.includes('(PENDING)')) {
+                            actionBtn = `
+                                <div class="mt-3 flex gap-2">
+                                    <button onclick="prosesCuti('${log.id}', '${empId}', ${durasi}, 'DISETUJUI')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-check"></i> Setujui</button>
+                                    <button onclick="prosesCuti('${log.id}', '${empId}', ${durasi}, 'DITOLAK')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i> Tolak</button>
+                                </div>
+                            `;
+                        }
+
+                        let badgeStatus = '';
+                        if(judulStr.includes('DISETUJUI')) badgeStatus = '<span class="ml-2 text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full">DISETUJUI</span>';
+                        if(judulStr.includes('DITOLAK')) badgeStatus = '<span class="ml-2 text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full">DITOLAK</span>';
+                        if(judulStr.includes('PENDING')) badgeStatus = '<span class="ml-2 text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full">MENUNGGU</span>';
+
+                        let cleanJudul = judulStr.replace(/\s\(PENDING\)|\s\(DISETUJUI\)|\s\(DITOLAK\)/g, '');
+
+                        return `
+                            <div class="flex items-start gap-4 p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 mt-1">
+                                    <i class="fa-solid fa-calendar-day"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-bold text-slate-800">${cleanJudul} ${badgeStatus}</p>
+                                            <p class="text-xs text-slate-400 font-mono mt-0.5">${log.waktu} • Cabang: ${getNamaCabang(log.cabangId)}</p>
+                                        </div>
+                                        <span class="text-xs bg-slate-100 px-2 py-1 rounded border border-slate-200 font-bold text-slate-600">Durasi: ${durasi} Hari</span>
+                                    </div>
+                                    <p class="text-sm text-slate-600 mt-2">${textAlasan}</p>
+                                    ${actionBtn}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+        }
+
+        // --- SISTEM NOTIFIKASI & TUGAS ---
+        function getUserRelevantLogs() {
+            let logs = state.laporan;
+            const user = getCurrentUser();
+            
+            if (state.isOwner) {
+                if (state.activeCabangFilter !== 'ALL') {
+                    logs = logs.filter(l => l.cabangId === state.activeCabangFilter || !l.cabangId);
+                }
+            } else if (user) {
+                logs = logs.filter(l => 
+                    l.cabangId === '' || 
+                    l.cabangId === user.cabangId || 
+                    String(l.detail).includes('|' + user.id + '|') || 
+                    String(l.detail).includes(user.nama) ||
+                    String(l.judul).includes('TUGAS')
+                );
+            }
+            return logs;
+        }
+
+        function updateNotifBadge() {
+            if (!state.loggedInUserId) return;
+            const logs = getUserRelevantLogs();
+            const badge = document.getElementById('notif-badge');
+            if (logs.length > 0) {
+                const latestId = logs[0].id;
+                const lastSeenId = localStorage.getItem('lastSeenNotif_' + state.loggedInUserId);
+                if (latestId !== lastSeenId) {
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function openModalNotifikasi() {
+            const logs = getUserRelevantLogs().slice(0, 15); 
+            
+            if (logs.length > 0) {
+                localStorage.setItem('lastSeenNotif_' + state.loggedInUserId, logs[0].id);
+            }
+            updateNotifBadge(); 
+            
+            let listHTML = '<p class="text-sm text-slate-500 text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">Belum ada notifikasi baru.</p>';
+            
+            if (logs.length > 0) {
+                listHTML = logs.map(log => {
+                    let judulStr = String(log.judul || '');
+                    let detailStr = String(log.detail || '');
+                    
+                    let icon = 'fa-info-circle text-blue-500';
+                    let bgIcon = 'bg-blue-100';
+                    
+                    if (judulStr.includes('Transaksi') || judulStr.includes('Payroll')) {
+                        icon = 'fa-sack-dollar text-emerald-500'; bgIcon = 'bg-emerald-100';
+                    } else if (judulStr.includes('Cuti')) {
+                        icon = 'fa-calendar text-amber-500'; bgIcon = 'bg-amber-100';
+                    } else if (judulStr.includes('TUGAS')) {
+                        icon = 'fa-bullhorn text-rose-500'; bgIcon = 'bg-rose-100';
+                    }
+
+                    if (detailStr.startsWith('REQ_CUTI|')) {
+                        const parts = detailStr.split('|');
+                        detailStr = parts[3];
+                    }
+
+                    let cleanJudul = judulStr.replace('TUGAS & INFO', 'PENGUMUMAN / TUGAS BARU');
+                    cleanJudul = cleanJudul.replace(/\s\(PENDING\)|\s\(DISETUJUI\)|\s\(DITOLAK\)/g, '');
+
+                    return `
+                        <div class="flex gap-4 p-4 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors">
+                            <div class="w-10 h-10 rounded-full ${bgIcon} flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <i class="fa-solid ${icon}"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-800">${cleanJudul}</p>
+                                <p class="text-sm text-slate-600 mt-1">${detailStr}</p>
+                                <p class="text-[11px] font-bold text-slate-400 mt-2 tracking-wide">${log.waktu} • ${getNamaCabang(log.cabangId)}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            const html = `
+                <div class="max-h-[60vh] overflow-y-auto custom-scrollbar -mx-6 px-6">
+                    ${listHTML}
+                </div>
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-4">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium text-sm transition-colors">Tutup</button>
+                </div>
+            `;
+            openModal('<i class="fa-solid fa-bell text-blue-600 mr-2"></i> Notifikasi Sistem', html);
+        }
+
+        function openModalTugas() {
+            if(!state.isOwner) return;
+            const opts = `<option value="ALL">🏢 Semua Cabang (Pengumuman Global)</option>` + state.cabang.map(c => `<option value="${c.id}">${c.namaCabang}</option>`).join('');
+            const formHTML = `
+                <form id="form-tugas" class="space-y-4">
+                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
+                        <p class="text-xs text-blue-700 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> Notifikasi ini akan berbunyi/muncul di akun karyawan pada cabang target yang dipilih secara real-time.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Target Cabang & Karyawan</label>
+                        <select id="tugas-cabang" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">${opts}</select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Isi Tugas / Pengumuman</label>
+                        <textarea id="tugas-isi" required rows="4" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik rincian tugas atau informasi penting di sini..."></textarea>
+                    </div>
+                    <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                        <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium text-sm">Batal</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm shadow-sm flex items-center gap-2">
+                            <i class="fa-solid fa-paper-plane"></i> Kirim Notifikasi
+                        </button>
+                    </div>
+                </form>
+            `;
+            openModal('Sebarkan Tugas / Pengumuman', formHTML);
+            document.getElementById('form-tugas').onsubmit = (e) => {
+                e.preventDefault();
+                const isi = document.getElementById('tugas-isi').value;
+                const cabId = document.getElementById('tugas-cabang').value;
+                
+                const newLog = { id: generateId('LOG'), waktu: getWaktuSekarang(), judul: 'TUGAS & INFO', detail: isi, cabangId: cabId === 'ALL' ? '' : cabId };
+                state.laporan.unshift(newLog); 
+                sendToSheet('addData', 'Laporan', newLog);
+                
+                closeModal();
+                showToast('Tugas/Info berhasil disebarkan!', 'success');
+                renderData();
+            };
         }
 
         function initChart() {
