@@ -76,7 +76,6 @@
                     Masuk ke Sistem
                 </button>
                 
-                <!-- Helper text for demo mode injected here via JS -->
                 <div id="demo-info-container"></div>
             </form>
         </div>
@@ -118,9 +117,10 @@
                     <i class="fa-solid fa-wallet w-5 text-center"></i>
                     <span class="font-medium">Keuangan Perusahaan</span>
                 </a>
+                <!-- Laporan hanya untuk owner -->
                 <a href="#" onclick="navigate('laporan')" id="nav-laporan" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" style="display: none;">
                     <i class="fa-solid fa-clipboard-list w-5 text-center"></i>
-                    <span class="font-medium">Laporan Harian</span>
+                    <span class="font-medium">Aktivitas Laporan</span>
                 </a>
                 <a href="#" onclick="navigate('pengaturan')" id="nav-pengaturan" class="nav-item flex items-center gap-4 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" style="display: none;">
                     <i class="fa-solid fa-gear w-5 text-center"></i>
@@ -161,6 +161,15 @@
 
                     <div id="user-cabang-badge" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-bold py-1.5 px-3 rounded-lg">
                         <i class="fa-solid fa-location-dot mr-1"></i> <span id="user-cabang-text">Cabang</span>
+                    </div>
+
+                    <!-- Indikator Live Sync (Real-time) -->
+                    <div id="live-sync-indicator" class="hidden items-center gap-2 px-2 py-1 bg-slate-100 rounded-lg" title="Sistem terhubung dan tersinkronisasi secara langsung">
+                        <span class="relative flex h-2.5 w-2.5">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span class="text-xs font-semibold text-slate-500 hidden sm:block">Live</span>
                     </div>
 
                     <button class="relative p-2 text-slate-400 hover:text-slate-600 transition-colors" onclick="showToast('Sistem Keamanan Aktif!', 'info')">
@@ -210,7 +219,7 @@
                                     <i class="fa-solid fa-clipboard-check"></i>
                                 </div>
                                 <div class="overflow-hidden">
-                                    <p class="text-sm font-medium text-slate-500 truncate">Laporan (Filter)</p>
+                                    <p class="text-sm font-medium text-slate-500 truncate">Log Sistem (Filter)</p>
                                     <h3 class="text-2xl font-bold text-slate-800" id="dash-total-laporan">0</h3>
                                 </div>
                             </div>
@@ -224,7 +233,7 @@
                                 </div>
                             </div>
                             <div id="activity-wrapper" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 transition-all">
-                                <h3 class="text-lg font-bold text-slate-800 mb-4">Aktivitas Terakhir</h3>
+                                <h3 class="text-lg font-bold text-slate-800 mb-4">Aktivitas Sistem Laporan</h3>
                                 <div class="space-y-4" id="container-aktivitas">
                                     <p class="text-sm text-slate-500 text-center py-4">Belum ada aktivitas terbaru.</p>
                                 </div>
@@ -253,7 +262,7 @@
                                 </div>
                                 <div>
                                     <p class="text-sm font-medium text-slate-500">Sisa Cuti Tahunan</p>
-                                    <h3 class="text-2xl font-bold text-slate-800"><span id="karyawan-dash-cuti">12</span> Hari</h3>
+                                    <h3 class="text-2xl font-bold text-slate-800"><span id="karyawan-dash-cuti">0</span> Hari</h3>
                                 </div>
                             </div>
                             <!-- Kehadiran -->
@@ -362,7 +371,7 @@
 
                 <!-- VIEW: LAPORAN -->
                 <div id="view-laporan" class="view-section hidden fade-in">
-                    <h3 class="text-xl font-bold text-slate-800 mb-6">Laporan Harian (Log)</h3>
+                    <h3 class="text-xl font-bold text-slate-800 mb-6">Aktivitas Sistem & Pengajuan</h3>
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                         <div class="relative border-l-2 border-slate-200 ml-3 space-y-8" id="container-laporan"></div>
                     </div>
@@ -660,17 +669,18 @@ function deleteDataDynamically(ss, sheetName, id) {
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbysOgLAmryQF8GJNkxR-sQELEjDnrSeAisVJn8JRUIiuIJgnfYk9Q7dHA-zXaEz_tbp/exec'; 
 
         /**
-         * DAFTAR FITUR & AKSES CHECKLIST
+         * DAFTAR FITUR & AKSES CHECKLIST (Hak Akses Laporan Dihapus untuk Karyawan)
          */
         const listAksesTersedia = [
             { id: 'dashboard', label: 'Dashboard & Statistik' },
             { id: 'karyawan', label: 'Manajemen Karyawan' },
             { id: 'gaji', label: 'Proses Penggajian' },
             { id: 'keuangan', label: 'Arus Kas Keuangan' },
-            { id: 'laporan', label: 'Aktivitas & Laporan' },
             { id: 'pengaturan', label: 'Pengaturan Database & Cabang' },
             { id: 'can_edit', label: 'Izin Edit/Hapus Data' }
         ];
+
+        let backgroundSyncInterval = null; 
 
         function getAccessArray(roleStr) {
             if (!roleStr) return [];
@@ -733,7 +743,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             
             errorBox.classList.add('hidden');
             
-            // Pencocokan SANGAT KETAT: Username dan Password 100% case-sensitive dan mendeteksi spasi
+            // Pencocokan SANGAT KETAT
             let user = state.owner.find(u => String(u.username) === String(un) && String(u.password) === String(pw));
             if(user) {
                 state.isOwner = true;
@@ -766,14 +776,22 @@ function deleteDataDynamically(ss, sheetName, id) {
             }
         }
 
-        function logout() {
-            showConfirm('Keluar Sistem', 'Apakah Anda yakin ingin keluar dari sesi ini?', () => {
-                document.getElementById('login-screen').classList.remove('hidden');
-                setTimeout(() => { document.getElementById('login-screen').style.opacity = '1'; }, 10);
-                document.getElementById('login-password').value = '';
-                state.loggedInUserId = null;
-                state.isOwner = false;
-            }, 'bg-rose-600');
+        function logout(force = false) {
+            if (force) {
+                executeLogout();
+            } else {
+                showConfirm('Keluar Sistem', 'Apakah Anda yakin ingin keluar dari sesi ini?', () => {
+                    executeLogout();
+                }, 'bg-rose-600');
+            }
+        }
+
+        function executeLogout() {
+            document.getElementById('login-screen').classList.remove('hidden');
+            setTimeout(() => { document.getElementById('login-screen').style.opacity = '1'; }, 10);
+            document.getElementById('login-password').value = '';
+            state.loggedInUserId = null;
+            state.isOwner = false;
         }
 
         function applyUserLogin(user) {
@@ -817,10 +835,10 @@ function deleteDataDynamically(ss, sheetName, id) {
             if (!user) return;
             const arrAkses = getAccessArray(user.role);
 
-            ['dashboard', 'karyawan', 'gaji', 'keuangan', 'laporan', 'pengaturan'].forEach(view => {
+            // Hide/Show Standard Menus
+            ['dashboard', 'karyawan', 'gaji', 'keuangan', 'pengaturan'].forEach(view => {
                 const navItem = document.getElementById(`nav-${view}`);
                 if (navItem) {
-                    // Semua user (Owner/Karyawan) wajib bisa melihat dashboard
                     if (view === 'dashboard') {
                         navItem.style.display = 'flex';
                     } else {
@@ -829,19 +847,36 @@ function deleteDataDynamically(ss, sheetName, id) {
                 }
             });
 
+            // Laporan Menu is 100% EXCLUSIVE to Owner
+            const navLaporan = document.getElementById('nav-laporan');
+            if (navLaporan) navLaporan.style.display = state.isOwner ? 'flex' : 'none';
+
+            // Cards Dashboard
             document.getElementById('card-saldo').style.display = arrAkses.includes('keuangan') ? 'flex' : 'none';
             document.getElementById('card-gaji').style.display = arrAkses.includes('gaji') ? 'flex' : 'none';
             document.getElementById('card-karyawan').style.display = arrAkses.includes('karyawan') ? 'flex' : 'none';
-            document.getElementById('card-laporan').style.display = arrAkses.includes('laporan') ? 'flex' : 'none';
+            document.getElementById('card-laporan').style.display = state.isOwner ? 'flex' : 'none';
             
             const chartWrapper = document.getElementById('finance-chart-wrapper');
             const activityWrapper = document.getElementById('activity-wrapper');
+            
             if (arrAkses.includes('keuangan')) {
                 chartWrapper.style.display = 'block';
-                activityWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1";
+                if (state.isOwner) {
+                    activityWrapper.style.display = 'block';
+                    chartWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 transition-all";
+                } else {
+                    activityWrapper.style.display = 'none'; // Sembunyikan global activity
+                    chartWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-3 transition-all";
+                }
             } else {
                 chartWrapper.style.display = 'none';
-                activityWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-3";
+                if (state.isOwner) {
+                    activityWrapper.style.display = 'block';
+                    activityWrapper.className = "bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-3 transition-all";
+                } else {
+                    activityWrapper.style.display = 'none';
+                }
             }
         }
 
@@ -930,8 +965,17 @@ function deleteDataDynamically(ss, sheetName, id) {
         const formatNumberDots = (angka) => new Intl.NumberFormat('id-ID').format(angka || 0);
         const formatInputRupiah = (el) => { let val = el.value.replace(/[^0-9]/g, ''); el.value = val ? new Intl.NumberFormat('id-ID').format(val) : ''; };
         const formatTgl = (tglStr) => { const d = new Date(tglStr); return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }); };
+        const formatDateForInput = (tglStr) => { if(!tglStr) return ''; const d = new Date(tglStr); return !isNaN(d.getTime()) ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : tglStr; };
         const generateId = (prefix) => prefix + '-' + Math.random().toString(36).substr(2, 6).toUpperCase();
         
+        // Fungsi otomatis menangani angka awalan 0 agar tidak hilang di Google Sheets
+        const handleLeadingZero = (val) => {
+            if (!val) return '';
+            let strVal = String(val).trim();
+            if (strVal.startsWith("'")) return strVal;
+            return strVal.startsWith('0') ? "'" + strVal : strVal;
+        };
+
         const generateEmployeeId = () => {
             let maxStr = 0;
             state.karyawan.forEach(emp => {
@@ -945,13 +989,72 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         const getWaktuSekarang = () => { const d = new Date(); let hours = d.getHours(); let ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12 || 12; const mins = d.getMinutes().toString().padStart(2, '0'); return `Hari ini, ${hours}:${mins} ${ampm}`; };
 
-        // --- FETCH DB & DEMO MODE ---
+        // --- FETCH DB & BACKGROUND SYNC ---
         async function sendToSheet(action, sheetName, data = null) {
-            if (!GAS_URL) return null; // Skip fetch in demo mode (Local State will persist until reload)
+            if (!GAS_URL) return null; 
             try {
                 const response = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, sheetName, data }) });
                 return await response.json();
             } catch (err) { console.error("Err DB:", err); return null; }
+        }
+
+        // Fungsi Sinkronisasi Latar Belakang (Secara Diam-diam)
+        async function silentBackgroundFetch() {
+            if (!GAS_URL) return;
+            
+            try {
+                const result = await sendToSheet('getData', '');
+                
+                if (result && result.status === 'success' && result.data) {
+                    const wasMaintenance = state.isMaintenance;
+
+                    state.sistem = result.data.sistem || [];
+                    const maintSetting = state.sistem.find(s => s.kunci === 'maintenance_mode');
+                    state.isMaintenance = maintSetting ? (maintSetting.nilai === 'true' || maintSetting.nilai === true) : false;
+
+                    state.cabang = result.data.cabang || [];
+                    
+                    state.owner = result.data.owner || [];
+                    state.owner.forEach(o => o.role = listAksesTersedia.map(f => f.id).join(','));
+
+                    state.karyawan = result.data.karyawan || [];
+                    state.karyawan.forEach(k => { 
+                        k.gajiPokok = Number(k.gajiPokok); 
+                        k.tunjangan = Number(k.tunjangan);
+                        k.jatahCuti = k.jatahCuti !== undefined && k.jatahCuti !== "" ? Number(k.jatahCuti) : 12;
+                    });
+
+                    state.keuangan = result.data.keuangan || [];
+                    state.keuangan.forEach(k => k.nominal = Number(k.nominal));
+                    state.laporan = result.data.laporan || [];
+                    
+                    state.riwayatPosisi = result.data.riwayatposisi || [];
+
+                    // Validasi Keamanan Latar Belakang Saat User Sedang Login
+                    if (state.loggedInUserId) {
+                        // 1. Auto-Logout jika Maintenance dihidupkan Owner
+                        if (!state.isOwner && !wasMaintenance && state.isMaintenance) {
+                            showToast('Sistem memasuki mode perbaikan. Anda dikeluarkan otomatis.', 'warning');
+                            logout(true); // Paksa logout tanpa dialog konfirmasi
+                            return;
+                        }
+
+                        // 2. Auto-Logout jika Akun Karyawan Dihapus / Username Diganti Admin
+                        const currentUser = getCurrentUser();
+                        if (!currentUser) {
+                            showToast('Sesi kedaluwarsa: Akun tidak ditemukan di database.', 'error');
+                            logout(true);
+                            return;
+                        }
+
+                        // Render ulang UI secara diam-diam tanpa loader
+                        renderData();
+                        updateChart();
+                    }
+                }
+            } catch (err) {
+                console.log("Background sync failed:", err);
+            }
         }
 
         async function loadDatabaseOnStart() {
@@ -1017,6 +1120,16 @@ function deleteDataDynamically(ss, sheetName, id) {
                 document.getElementById('login-loading').classList.add('hidden');
                 document.getElementById('login-form-container').classList.remove('hidden');
                 document.getElementById('login-status').innerText = "Sinkronisasi berhasil. Silakan Login.";
+
+                // Tampilkan indikator Live Sync di Header saat terhubung
+                document.getElementById('live-sync-indicator').classList.remove('hidden');
+                document.getElementById('live-sync-indicator').classList.add('flex');
+
+                // MULAI SINKRONISASI LATAR BELAKANG SETIAP 10 DETIK
+                if (!backgroundSyncInterval) {
+                    backgroundSyncInterval = setInterval(silentBackgroundFetch, 10000); 
+                }
+
             } else {
                 document.getElementById('login-status').innerText = "Gagal memuat database.";
                 document.getElementById('login-loading').classList.add('hidden');
@@ -1045,7 +1158,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 e.preventDefault();
                 const namaCabangBaru = document.getElementById('cabang-nama').value;
                 
-                // Sangat sensitif: Cek duplikat cabang (membedakan huruf besar/kecil & spasi)
                 if (state.cabang.some(c => String(c.namaCabang) === String(namaCabangBaru))) {
                     return showToast('Nama cabang tersebut sudah persis ada di sistem!', 'warning');
                 }
@@ -1163,7 +1275,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 e.preventDefault();
                 const username = document.getElementById('inp-username').value;
                 
-                // Sangat sensitif: Membedakan huruf besar/kecil secara ketat tanpa di-.trim()
                 if (username && state.karyawan.some(a => String(a.username) === String(username))) {
                     return showToast('Username persis ini sudah dipakai karyawan lain!', 'warning');
                 }
@@ -1184,9 +1295,9 @@ function deleteDataDynamically(ss, sheetName, id) {
                     password: document.getElementById('inp-password').value,
                     role: roleString,
                     cabangId: selCabangId,
-                    noTelp: document.getElementById('inp-notelp').value,
+                    noTelp: handleLeadingZero(document.getElementById('inp-notelp').value),
                     tanggalGabung: document.getElementById('inp-joindate').value,
-                    noRekening: document.getElementById('inp-norek').value,
+                    noRekening: handleLeadingZero(document.getElementById('inp-norek').value),
                     jatahCuti: Number(document.getElementById('inp-cuti').value) || 12
                 };
                 
@@ -1208,6 +1319,10 @@ function deleteDataDynamically(ss, sheetName, id) {
             const currentAkses = getAccessArray(emp.role);
             const selectCabangOpts = state.cabang.map(c => `<option value="${c.id}" ${emp.cabangId === c.id ? 'selected' : ''}>${c.namaCabang}</option>`).join('');
 
+            const safeJoinDate = formatDateForInput(emp.tanggalGabung);
+            const cleanTelp = emp.noTelp ? String(emp.noTelp).replace(/^'/, '') : '';
+            const cleanRek = emp.noRekening ? String(emp.noRekening).replace(/^'/, '') : '';
+
             const formHTML = `
                 <form id="form-edit-karyawan" class="space-y-4">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1221,12 +1336,12 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
                             <input type="text" id="edit-nama" value="${emp.nama}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon (WhatsApp)</label>
-                            <input type="tel" id="edit-notelp" value="${emp.noTelp || ''}" placeholder="08xx..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                            <input type="tel" id="edit-notelp" value="${cleanTelp}" placeholder="08xx..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Posisi / Jabatan (Terkunci)</label>
                             <input type="text" id="edit-posisi" value="${emp.posisi}" readonly title="Gunakan fitur Riwayat Jabatan untuk mengubah posisi" class="w-full px-3 py-2 border border-slate-200 bg-slate-100 text-slate-500 rounded-lg outline-none cursor-not-allowed">
                             <p class="text-xs text-amber-600 mt-1"><i class="fa-solid fa-info-circle"></i> Gunakan tombol "Histori" di tabel untuk ubah posisi.</p></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Tanggal Bergabung</label>
-                            <input type="date" id="edit-joindate" value="${emp.tanggalGabung || ''}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                            <input type="date" id="edit-joindate" value="${safeJoinDate}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                         </div>
 
                         <!-- Bagian Kanan: Finansial & Keamanan -->
@@ -1241,7 +1356,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                                     <input type="text" id="edit-tunj" value="${formatNumberDots(emp.tunjangan)}" required oninput="formatInputRupiah(this)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                                 </div>
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor Rekening Bank</label>
-                                <input type="text" id="edit-norek" value="${emp.noRekening || ''}" placeholder="BCA / Mandiri / dll" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                                <input type="text" id="edit-norek" value="${cleanRek}" placeholder="BCA / Mandiri / dll" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Jatah Cuti Tahunan (Hari)</label>
                                 <input type="number" id="edit-cuti" value="${emp.jatahCuti !== undefined ? emp.jatahCuti : 12}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
                             </div>
@@ -1282,7 +1397,6 @@ function deleteDataDynamically(ss, sheetName, id) {
 
                 const usernameEdit = document.getElementById('edit-username').value;
                 
-                // Sangat sensitif: Abaikan ID diri sendiri, tapi tolak jika sama persis dengan orang lain
                 if (usernameEdit && state.karyawan.some(a => a.id !== emp.id && String(a.username) === String(usernameEdit))) {
                     return showToast('Username persis ini sudah dipakai karyawan lain!', 'warning');
                 }
@@ -1299,9 +1413,9 @@ function deleteDataDynamically(ss, sheetName, id) {
                 emp.password = document.getElementById('edit-password').value;
                 emp.role = roleString;
                 
-                emp.noTelp = document.getElementById('edit-notelp').value;
+                emp.noTelp = handleLeadingZero(document.getElementById('edit-notelp').value);
                 emp.tanggalGabung = document.getElementById('edit-joindate').value;
-                emp.noRekening = document.getElementById('edit-norek').value;
+                emp.noRekening = handleLeadingZero(document.getElementById('edit-norek').value);
                 emp.jatahCuti = Number(document.getElementById('edit-cuti').value) || 0;
                 
                 sendToSheet('updateData', 'Karyawan', emp);
@@ -1381,7 +1495,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 const keterangan = document.getElementById('jabatan-ket').value;
                 const tanggal = document.getElementById('jabatan-tgl').value;
 
-                // Sensitif 1 huruf: Perbandingan ketat (tanpa toLowerCase) agar pengguna bisa mengedit typo huruf besar/kecil
                 if (String(posisiLama) === String(posisiBaru)) {
                     return showToast('Posisi baru tidak boleh persis sama dengan posisi saat ini', 'warning');
                 }
@@ -1419,7 +1532,6 @@ function deleteDataDynamically(ss, sheetName, id) {
         function openModalKeuangan(tipe) {
             if(!checkPermission()) return;
             
-            // Cek apabila cabang masih kosong sama sekali
             if (state.cabang.length === 0) {
                 return showToast('Silakan tambah Cabang terlebih dahulu di menu Pengaturan.', 'warning');
             }
@@ -1483,7 +1595,6 @@ function deleteDataDynamically(ss, sheetName, id) {
             const total = targetKaryawan.reduce((sum, emp) => sum + emp.gajiPokok + emp.tunjangan, 0);
             showConfirm('Proses Penggajian (Payroll)', `Sistem akan mencatat pengeluaran kas sebesar <b>${formatRupiah(total)}</b> untuk <b>${targetKaryawan.length} Karyawan</b> (Sesuai Filter). Lanjutkan?`, () => {
                 
-                // Gunakan cabang filter yang sedang aktif, atau simpan dengan ID kosong jika sedang view 'ALL'
                 const trxCabangId = state.activeCabangFilter === 'ALL' ? '' : state.activeCabangFilter;
 
                 const trx = { id: generateId('TRX'), tanggal: new Date().toISOString().split('T')[0], tipe: 'Pengeluaran', keterangan: 'Pembayaran Gaji Karyawan', nominal: total, statusTransaksi: 'Selesai', cabangId: trxCabangId };
@@ -1494,52 +1605,6 @@ function deleteDataDynamically(ss, sheetName, id) {
                 renderData();
                 updateChart();
             }, 'bg-emerald-600');
-        }
-
-        // --- MANAJEMEN UI (RENDER & NAV) ---
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            state.isSidebarOpen = !state.isSidebarOpen;
-            
-            if (state.isSidebarOpen) {
-                sidebar.classList.remove('-translate-x-full');
-                overlay.classList.remove('hidden');
-            } else {
-                sidebar.classList.add('-translate-x-full');
-                overlay.classList.add('hidden');
-            }
-        }
-
-        function navigate(viewId, force = false) {
-            if(state.loggedInUserId) {
-                const user = getCurrentUser();
-                const arrAkses = getAccessArray(user ? user.role : '');
-                if (viewId !== 'dashboard' && !arrAkses.includes(viewId) && !force) {
-                    return showToast('Sistem Menolak: Anda tidak memiliki akses ke halaman ini.', 'error');
-                }
-            }
-
-            state.currentView = viewId;
-            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            const targetView = document.getElementById(`view-${viewId}`);
-            if(targetView) targetView.classList.remove('hidden');
-
-            document.querySelectorAll('.nav-item').forEach(el => {
-                el.classList.remove('bg-blue-600', 'text-white');
-                el.classList.add('text-slate-300');
-            });
-            const activeNav = document.getElementById(`nav-${viewId}`);
-            if (activeNav) {
-                activeNav.classList.remove('text-slate-300', 'hover:bg-slate-800');
-                activeNav.classList.add('bg-blue-600', 'text-white');
-            }
-
-            const titles = { 'dashboard': 'Dashboard ERP', 'karyawan': 'Data SDM Cabang', 'gaji': 'Payroll Keuangan', 'keuangan': 'Arus Kas Cabang', 'laporan': 'Log Sistem', 'pengaturan': 'Pengaturan Multi-Cabang' };
-            document.getElementById('header-title').innerText = titles[viewId] || 'CorpManage ERP';
-
-            if (window.innerWidth < 1024 && state.isSidebarOpen) toggleSidebar();
         }
 
         function updateDashboardStats() {
@@ -1572,34 +1637,45 @@ function deleteDataDynamically(ss, sheetName, id) {
                     document.getElementById('karyawan-dash-posisi').innerText = user.posisi;
                     document.getElementById('karyawan-dash-cabang').innerText = getNamaCabang(user.cabangId);
                     
-                    // Kalkulasi log pengajuan cuti untuk mengurangi jatah cuti bawaan karyawan
-                    const baseCuti = user.jatahCuti !== undefined ? user.jatahCuti : 12;
-                    const logCuti = state.laporan.filter(l => l.judul.includes('Pengajuan Cuti') && l.detail.includes(user.nama));
-                    const sisaCuti = baseCuti - logCuti.length;
-                    document.getElementById('karyawan-dash-cuti').innerText = sisaCuti > 0 ? sisaCuti : 0;
+                    document.getElementById('karyawan-dash-cuti').innerText = user.jatahCuti !== undefined ? user.jatahCuti : 0;
 
                     // Kehadiran sederhana
                     document.getElementById('karyawan-dash-hadir').innerText = user.status === 'Aktif' ? 'Terjadwal' : 'Sedang Cuti';
 
                     // Rekap Riwayat Aktivitas Pribadi
                     const contAkt = document.getElementById('karyawan-dash-aktivitas');
-                    const riwayat = state.laporan.filter(l => l.detail.includes(user.nama)).slice(0, 5);
+                    const riwayat = state.laporan.filter(l => l.detail.includes(user.id) || l.detail.includes(user.nama)).slice(0, 5);
                     
                     if (riwayat.length === 0) {
                         contAkt.innerHTML = `<p class="text-sm text-slate-500 text-center py-4 bg-slate-50 rounded-lg">Belum ada pengajuan atau aktivitas yang tercatat.</p>`;
                     } else {
-                        contAkt.innerHTML = riwayat.map(log => `
-                            <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                        contAkt.innerHTML = riwayat.map(log => {
+                            let displayDetail = log.detail;
+                            if (displayDetail.startsWith('REQ_CUTI|')) {
+                                const parts = displayDetail.split('|');
+                                displayDetail = parts[3] + ` (Durasi: ${parts[2]} Hari)`;
+                            }
+
+                            let badgeStatus = '';
+                            if(log.judul.includes('DISETUJUI')) badgeStatus = '<span class="ml-2 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">DISETUJUI</span>';
+                            if(log.judul.includes('DITOLAK')) badgeStatus = '<span class="ml-2 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">DITOLAK</span>';
+                            if(log.judul.includes('PENDING')) badgeStatus = '<span class="ml-2 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">MENUNGGU</span>';
+
+                            let cleanJudul = log.judul.replace(/\s\(PENDING\)|\s\(DISETUJUI\)|\s\(DITOLAK\)/g, '');
+
+                            return `
+                                <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <i class="fa-solid ${log.judul.includes('Cuti') ? 'fa-calendar' : 'fa-clock-rotate-left'}"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 text-sm">${cleanJudul} ${badgeStatus}</p>
+                                        <p class="text-xs text-slate-500 mt-1">${log.waktu}</p>
+                                        <p class="text-sm text-slate-600 mt-1">${displayDetail}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="font-bold text-slate-800 text-sm">${log.judul}</p>
-                                    <p class="text-xs text-slate-500 mt-1">${log.waktu}</p>
-                                    <p class="text-sm text-slate-600 mt-1">${log.detail}</p>
-                                </div>
-                            </div>
-                        `).join('');
+                            `;
+                        }).join('');
                     }
                 }
             }
@@ -1639,17 +1715,49 @@ function deleteDataDynamically(ss, sheetName, id) {
                 const selesai = document.getElementById('cuti-selesai').value;
                 const alasan = document.getElementById('cuti-alasan').value;
 
-                tambahLaporan(
-                    'Pengajuan Cuti / Izin (Menunggu Konfirmasi)', 
-                    `${user.nama} mengajukan cuti dari ${formatTgl(mulai)} s.d ${formatTgl(selesai)}. Alasan: ${alasan}`, 
-                    false 
-                );
+                const d1 = new Date(mulai);
+                const d2 = new Date(selesai);
+                d1.setHours(0,0,0,0);
+                d2.setHours(0,0,0,0);
+
+                if (d2 < d1) return showToast('Tanggal selesai tidak boleh lebih awal dari tanggal mulai.', 'error');
+
+                const durasiHari = Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+
+                if (user.jatahCuti !== undefined && durasiHari > user.jatahCuti) {
+                    return showToast(`Sisa cuti Anda tidak cukup. Tersisa: ${user.jatahCuti} Hari`, 'error');
+                }
+
+                const payloadDetail = `REQ_CUTI|${user.id}|${durasiHari}|${user.nama} mengajukan cuti dari ${formatTgl(mulai)} s.d ${formatTgl(selesai)}. Alasan: ${alasan}`;
+
+                tambahLaporan('Pengajuan Cuti (PENDING)', payloadDetail, false);
                 
                 closeModal();
-                showToast('Pengajuan cuti berhasil dikirim!', 'success');
-                renderData(); // Ini otomatis me-refresh sisa cuti & tabel log aktivitas karyawan
+                showToast('Pengajuan cuti berhasil dikirim ke Owner!', 'success');
+                renderData();
             };
         }
+
+        window.prosesCuti = function(logId, empId, durasi, status) {
+            const log = state.laporan.find(l => l.id === logId);
+            if (!log) return;
+
+            if (status === 'DISETUJUI') {
+                const emp = state.karyawan.find(k => k.id === empId);
+                if (emp) {
+                    emp.jatahCuti = Math.max(0, (emp.jatahCuti || 0) - durasi);
+                    sendToSheet('updateData', 'Karyawan', emp);
+                } else {
+                    return showToast('Karyawan tidak ditemukan (Mungkin sudah dihapus)', 'error');
+                }
+            }
+
+            log.judul = `Pengajuan Cuti (${status})`;
+            sendToSheet('updateData', 'Laporan', log);
+
+            showToast(`Cuti berhasil ${status.toLowerCase()}!`, 'success');
+            renderData();
+        };
 
         function renderData() {
             updateDashboardStats();
@@ -1725,7 +1833,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                             <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex justify-center items-center font-bold text-xs uppercase">${emp.nama.charAt(0)}</div>
                             <div>
                                 <div class="font-medium">${emp.nama}</div>
-                                <div class="text-xs text-slate-500"><i class="fa-solid fa-phone mt-1"></i> ${emp.noTelp || '-'}</div>
+                                <div class="text-xs text-slate-500"><i class="fa-solid fa-phone mt-1"></i> ${emp.noTelp ? String(emp.noTelp).replace(/^'/, '') : '-'}</div>
                                 <div class="text-xs text-emerald-600 mt-0.5"><i class="fa-solid fa-location-dot"></i> ${getNamaCabang(emp.cabangId)}</div>
                             </div>
                         </td>
@@ -1754,11 +1862,12 @@ function deleteDataDynamically(ss, sheetName, id) {
             } else {
                 tbodyGaji.innerHTML = fKaryawan.map(emp => {
                     const total = emp.gajiPokok + emp.tunjangan;
+                    const cleanRek = emp.noRekening ? String(emp.noRekening).replace(/^'/, '') : '';
                     return `
                     <tr class="hover:bg-slate-50 transition-colors">
                         <td class="px-6 py-4 font-medium">
                             ${emp.nama}
-                            ${emp.noRekening ? `<div class="text-xs text-slate-500 font-mono mt-1"><i class="fa-solid fa-money-check-dollar"></i> ${emp.noRekening}</div>` : ''}
+                            ${cleanRek ? `<div class="text-xs text-slate-500 font-mono mt-1"><i class="fa-solid fa-money-check-dollar"></i> ${cleanRek}</div>` : ''}
                         </td>
                         <td class="px-6 py-4 text-sm text-slate-500">${getNamaCabang(emp.cabangId)}</td>
                         <td class="px-6 py-4">${formatRupiah(emp.gajiPokok)}</td>
@@ -1800,26 +1909,58 @@ function deleteDataDynamically(ss, sheetName, id) {
                 contLaporan.innerHTML = emptyHTML;
                 contAktivitas.innerHTML = emptyHTML;
             } else {
-                contLaporan.innerHTML = fLaporan.map(log => `
-                    <div class="relative pl-6">
-                        <div class="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-white"></div>
-                        <p class="text-sm text-slate-400 mb-1">${log.waktu} — <span class="font-semibold text-slate-500">${getNamaCabang(log.cabangId)}</span></p>
-                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 shadow-sm">
-                            <p class="font-bold text-slate-800">${log.judul}</p>
-                            <p class="text-sm text-slate-600 mt-1">${log.detail}</p>
-                        </div>
-                    </div>
-                `).join('');
+                contLaporan.innerHTML = fLaporan.map(log => {
+                    let displayDetail = log.detail;
+                    let actionBtn = '';
+                    
+                    // Parsing Khusus untuk Log Cuti
+                    if (log.detail.startsWith('REQ_CUTI|')) {
+                        const parts = log.detail.split('|');
+                        const empId = parts[1];
+                        const durasi = parts[2];
+                        displayDetail = parts[3] + ` <br/><span class="text-xs bg-slate-100 px-2 py-0.5 rounded border border-slate-200 mt-1 inline-block">Durasi: <b>${durasi} Hari</b></span>`;
 
-                contAktivitas.innerHTML = fLaporan.slice(0, 5).map(log => `
+                        if (state.isOwner && log.judul.includes('(PENDING)')) {
+                            actionBtn = `
+                                <div class="mt-3 flex gap-2">
+                                    <button onclick="prosesCuti('${log.id}', '${empId}', ${durasi}, 'DISETUJUI')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-check"></i> Setujui Cuti</button>
+                                    <button onclick="prosesCuti('${log.id}', '${empId}', ${durasi}, 'DITOLAK')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-xmark"></i> Tolak</button>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    let badgeStatus = '';
+                    if(log.judul.includes('DISETUJUI')) badgeStatus = '<span class="ml-2 text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full">DISETUJUI</span>';
+                    if(log.judul.includes('DITOLAK')) badgeStatus = '<span class="ml-2 text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full">DITOLAK</span>';
+                    if(log.judul.includes('PENDING')) badgeStatus = '<span class="ml-2 text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full">PENDING</span>';
+
+                    let cleanJudul = log.judul.replace(/\s\(PENDING\)|\s\(DISETUJUI\)|\s\(DITOLAK\)/g, '');
+
+                    return `
+                        <div class="relative pl-6">
+                            <div class="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-white"></div>
+                            <p class="text-sm text-slate-400 mb-1">${log.waktu} — <span class="font-semibold text-slate-500">${getNamaCabang(log.cabangId)}</span></p>
+                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 shadow-sm">
+                                <p class="font-bold text-slate-800">${cleanJudul} ${badgeStatus}</p>
+                                <p class="text-sm text-slate-600 mt-1">${displayDetail}</p>
+                                ${actionBtn}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                contAktivitas.innerHTML = fLaporan.slice(0, 5).map(log => {
+                    let cleanJudul = log.judul.replace(/\s\(PENDING\)|\s\(DISETUJUI\)|\s\(DITOLAK\)/g, '');
+                    return `
                     <div class="flex gap-3 items-start">
-                        <div class="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                        <div class="w-2 h-2 mt-2 rounded-full ${log.judul.includes('PENDING') ? 'bg-amber-500' : 'bg-blue-500'} flex-shrink-0"></div>
                         <div>
-                            <p class="text-sm font-medium leading-tight">${log.judul}</p>
+                            <p class="text-sm font-medium leading-tight">${cleanJudul}</p>
                             <p class="text-xs text-slate-400 mt-1">${getNamaCabang(log.cabangId)}</p>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             }
         }
 
@@ -1869,6 +2010,13 @@ function deleteDataDynamically(ss, sheetName, id) {
                 if (window.innerWidth >= 1024 && state.isSidebarOpen) {
                     state.isSidebarOpen = false;
                     document.getElementById('sidebar-overlay').classList.add('hidden');
+                }
+            });
+
+            // Deteksi jika jendela aplikasi dibuka kembali (Resume) untuk Sinkronisasi Instan
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === 'visible' && GAS_URL) {
+                    silentBackgroundFetch();
                 }
             });
         };
