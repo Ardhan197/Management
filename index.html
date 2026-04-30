@@ -478,7 +478,7 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
                                 <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets & Google Drive)</h4>
-                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui secara masif</b> untuk mendukung penghapusan KTP lama! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
+                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui secara masif</b> untuk mendukung KTP anti-lelet dan penghapusan otomatis! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                                 <i class="fa-regular fa-copy"></i> Salin Kode Baru
@@ -548,6 +548,7 @@ function uploadToDrive(fileData) {
   // Hapus file lama jika ada (agar Google Drive tidak penuh)
   if (fileData.oldUrl) {
     try {
+      // Mengambil ID dari berbagai format URL drive (uc?id= ATAU thumbnail?id=)
       const match = fileData.oldUrl.match(/id=([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
         DriveApp.getFileById(match[1]).setTrashed(true);
@@ -559,7 +560,9 @@ function uploadToDrive(fileData) {
 
   const blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.filename);
   const file = folder.createFile(blob);
-  return "https://drive.google.com/uc?export=view&id=" + file.getId();
+  
+  // MENGGUNAKAN THUMBNAIL API AGAR GAMBAR TIDAK BLANK/DIBLOKIR SAAT DITAMPILKAN
+  return "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1000";
 }
 
 function setupDatabase(ss) {
@@ -1121,11 +1124,21 @@ function deleteDataDynamically(ss, sheetName, id) {
             document.getElementById('btn-confirm-action').onclick = () => { onConfirm(); closeModal(); };
         }
 
+        // FUNGSI HELPER: Memperbaiki URL Drive lama yang nyangkut di DB agar jadi Thumbnail API
+        const fixDriveUrl = (url) => {
+            if (!url) return '';
+            if (url.includes('uc?export=view&id=')) {
+                return url.replace('uc?export=view&id=', 'thumbnail?id=') + '&sz=w1000';
+            }
+            return url;
+        };
+
         // FITUR BARU: Lihat KTP di Dalam Aplikasi (In-App Image Viewer)
         function viewKtp(url) {
+            const fixedUrl = fixDriveUrl(url);
             const html = `
                 <div class="flex justify-center bg-slate-100 p-2 rounded-lg">
-                    <img src="${url}" alt="Foto KTP Karyawan" class="max-w-full max-h-[60vh] rounded-lg shadow-md object-contain">
+                    <img src="${fixedUrl}" alt="Foto KTP Karyawan" class="max-w-full max-h-[60vh] rounded-lg shadow-md object-contain">
                 </div>
                 <div class="pt-4 flex justify-end mt-4 border-t border-slate-100">
                     <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 font-medium text-sm transition-colors shadow-sm">Tutup Preview</button>
@@ -1142,9 +1155,10 @@ function deleteDataDynamically(ss, sheetName, id) {
             const cabangName = getNamaCabang(emp.cabangId);
             const totalGaji = formatRupiah(emp.gajiPokok + emp.tunjangan);
             
+            const ktpDisplayUrl = fixDriveUrl(emp.ktpUrl);
             let ktpHtml = '<div class="text-sm text-slate-500 italic mt-2 bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">Foto KTP belum diunggah.</div>';
-            if (emp.ktpUrl) {
-                ktpHtml = `<img src="${emp.ktpUrl}" alt="KTP Karyawan" class="mt-3 w-full max-w-sm h-auto rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity" onclick="viewKtp('${emp.ktpUrl}')" title="Klik untuk memperbesar gambar">`;
+            if (ktpDisplayUrl) {
+                ktpHtml = `<img src="${ktpDisplayUrl}" alt="KTP Karyawan" class="mt-3 w-full max-w-sm h-auto rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity" onclick="viewKtp('${ktpDisplayUrl}')" title="Klik untuk memperbesar gambar">`;
             }
 
             const html = `
@@ -1320,7 +1334,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                         
                         let dummyUrl = data ? (data.ktpUrl || "") : "";
                         if (fileData) {
-                             dummyUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
+                             dummyUrl = "https://placehold.co/600x400/eeeeee/94a3b8?text=KTP+Offline";
                              if(data) data.ktpUrl = dummyUrl;
                         }
 
@@ -1692,11 +1706,12 @@ function deleteDataDynamically(ss, sheetName, id) {
             const cleanRek = emp.noRekening ? String(emp.noRekening).replace(/^'/, '') : '';
 
             // Tampilkan Gambar KTP jika URL Tersedia
-            const ktpPreviewUI = emp.ktpUrl 
+            const ktpDisplayUrl = fixDriveUrl(emp.ktpUrl);
+            const ktpPreviewUI = ktpDisplayUrl 
                 ? `<div class="mt-3 relative inline-block group">
                      <p class="text-xs font-semibold text-slate-500 mb-1">KTP Tersimpan:</p>
-                     <img src="${emp.ktpUrl}" alt="KTP Preview" class="h-28 w-auto rounded-lg border border-slate-300 shadow-sm object-cover transition-transform group-hover:scale-105">
-                     <a href="${emp.ktpUrl}" target="_blank" title="Lihat ukuran penuh" class="absolute -top-2 -right-2 bg-white text-blue-600 rounded-full w-7 h-7 flex items-center justify-center shadow-md border border-slate-100 hover:text-blue-800 hover:bg-slate-50 transition-colors">
+                     <img src="${ktpDisplayUrl}" alt="KTP Preview" class="h-28 w-auto rounded-lg border border-slate-300 shadow-sm object-cover transition-transform group-hover:scale-105">
+                     <a href="${ktpDisplayUrl}" target="_blank" title="Lihat ukuran penuh" class="absolute -top-2 -right-2 bg-white text-blue-600 rounded-full w-7 h-7 flex items-center justify-center shadow-md border border-slate-100 hover:text-blue-800 hover:bg-slate-50 transition-colors">
                         <i class="fa-solid fa-expand text-xs"></i>
                      </a>
                    </div>` 
@@ -2263,7 +2278,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                     }
 
                     // Menampilkan tombol "Lihat Foto KTP" yang memanggil In-App Image Viewer
-                    const ktpLinkHtml = emp.ktpUrl ? `<br/><button type="button" onclick="event.stopPropagation(); viewKtp('${emp.ktpUrl}')" class="text-[10px] text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 mt-1 cursor-pointer"><i class="fa-solid fa-image"></i> Lihat Foto KTP</button>` : '';
+                    const ktpDisplayUrl = fixDriveUrl(emp.ktpUrl);
+                    const ktpLinkHtml = emp.ktpUrl ? `<br/><button type="button" onclick="event.stopPropagation(); viewKtp('${ktpDisplayUrl}')" class="text-[10px] text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 mt-1 cursor-pointer"><i class="fa-solid fa-image"></i> Lihat Foto KTP</button>` : '';
 
                     return `
                     <tr class="hover:bg-slate-50 transition-colors group cursor-default">
