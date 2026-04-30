@@ -478,10 +478,10 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
                                 <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets & Google Drive)</h4>
-                                <p class="text-sm text-slate-400">Jika ingin beralih ke cloud database, salin dan tempel kode ini ke Google Apps Script Anda. Kode ini mendukung otomatisasi penyimpanan foto KTP ke Google Drive. <b>WAJIB LAKUKAN NEW DEPLOYMENT</b>.</p>
+                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui secara masif</b> untuk menghindari error URL kosong! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
-                                <i class="fa-regular fa-copy"></i> Salin Kode
+                                <i class="fa-regular fa-copy"></i> Salin Kode Baru
                             </button>
                         </div>
                         <div class="bg-slate-950 p-4 rounded-xl overflow-x-auto custom-scrollbar">
@@ -499,31 +499,32 @@ function doPost(e) {
     if (action === 'getData') {
       result.data = getAllData(ss);
     } else if (action === 'addData') {
+      
+      let fileUrl = "";
+      if (payload.fileData) {
+         fileUrl = uploadToDrive(payload.fileData);
+         payload.data.ktpUrl = fileUrl; // Otomatis disisipkan ke data sebelum di-save!
+      }
+      
       addDataDynamically(ss, payload.sheetName, payload.data);
       result.message = "Data berhasil ditambahkan";
+      result.url = fileUrl;
+      
     } else if (action === 'updateData') {
+      
+      let fileUrl = payload.data.ktpUrl || "";
+      if (payload.fileData) {
+         fileUrl = uploadToDrive(payload.fileData);
+         payload.data.ktpUrl = fileUrl; 
+      }
+      
       updateDataDynamically(ss, payload.sheetName, payload.data);
       result.message = "Data otomatis diperbarui";
+      result.url = fileUrl;
+      
     } else if (action === 'deleteData') {
       deleteDataDynamically(ss, payload.sheetName, payload.data);
       result.message = "Data berhasil dihapus dari database";
-    } else if (action === 'uploadFile') {
-      // Modul Simpan Foto KTP ke Google Drive
-      let folder;
-      const folderIter = DriveApp.getFoldersByName("ERP_KTP_Uploads");
-      if (folderIter.hasNext()) {
-        folder = folderIter.next();
-      } else {
-        folder = DriveApp.createFolder("ERP_KTP_Uploads");
-        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      }
-      
-      const blob = Utilities.newBlob(Utilities.base64Decode(payload.data.base64), payload.data.mimeType, payload.data.filename);
-      const file = folder.createFile(blob);
-      
-      // MENGEMBALIKAN DIRECT LINK AGAR BISA DITAMPILKAN DALAM TAG <img> HTML
-      result.url = "https://drive.google.com/uc?export=view&id=" + file.getId();
-      result.message = "File KTP berhasil diupload ke Drive";
     }
   } catch (error) {
     result = { status: 'error', message: error.toString() };
@@ -534,6 +535,20 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService.createTextOutput("API Database Aktif. Multi-Cabang & Auto-Setup Presisi Siap.").setMimeType(ContentService.MimeType.TEXT);
+}
+
+function uploadToDrive(fileData) {
+  let folder;
+  const folderIter = DriveApp.getFoldersByName("ERP_KTP_Uploads");
+  if (folderIter.hasNext()) {
+    folder = folderIter.next();
+  } else {
+    folder = DriveApp.createFolder("ERP_KTP_Uploads");
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  }
+  const blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64), fileData.mimeType, fileData.filename);
+  const file = folder.createFile(blob);
+  return "https://drive.google.com/uc?export=view&id=" + file.getId();
 }
 
 function setupDatabase(ss) {
@@ -638,6 +653,11 @@ function addDataDynamically(ss, sheetName, newRowData) {
     let colIndex = headers.indexOf(key);
     if (colIndex !== -1) {
       newRow[colIndex] = newRowData[key];
+    } else {
+      // Keamanan jika kolom entah bagaimana belum terbaca
+      sheet.getRange(1, headers.length + 1).setValue(key);
+      headers.push(key);
+      newRow.push(newRowData[key]);
     }
   }
   
@@ -731,7 +751,7 @@ function deleteDataDynamically(ss, sheetName, id) {
          * Kosongkan URL jika ingin menggunakan LocalStorage (Offline Mode).
          * Jika diisi, akan otomatis terhubung ke cloud Spreadsheet.
          */
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbxPpU4mc6Yz8Mz4bL9CqULJxe0TuST652K7T1eSsQdkuQmCEyiZXRyn-xOEr29IsZWb/exec'; 
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbzWiw2EigrPBdTQTwTQ1VjimhbWb28GbeBWDsSFtMqEnNhtcSPUFOHNFy61znWjnHjt/exec'; 
 
         /**
          * DAFTAR FITUR & AKSES CHECKLIST
@@ -1126,16 +1146,6 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         const getWaktuSekarang = () => { const d = new Date(); let hours = d.getHours(); let ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12 || 12; const mins = d.getMinutes().toString().padStart(2, '0'); return `Hari ini, ${hours}:${mins} ${ampm}`; };
 
-        // Helper Konversi Foto menjadi Base64
-        const getBase64 = (file) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-            });
-        };
-
         // FITUR BARU: Kompresi Gambar agar Upload Cepat & Tidak Error (Max 800px, Kualitas 70%)
         const compressImage = (file, maxSize = 800) => {
             return new Promise((resolve, reject) => {
@@ -1200,24 +1210,28 @@ function deleteDataDynamically(ss, sheetName, id) {
             riwayatposisi: []
         };
 
-        // Fungsi Super Pintar: Mendukung Cloud (GAS) maupun Offline (Local Storage)
-        async function sendToSheet(action, sheetName, data = null) {
+        // Fungsi Super Pintar: Menerima Parameter File dan Mengirim Secara Bersamaan (Atomic Action)
+        async function sendToSheet(action, sheetName, data = null, fileData = null) {
             if (GAS_URL) {
                 try {
-                    const response = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, sheetName, data }) });
+                    const response = await fetch(GAS_URL, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                        body: JSON.stringify({ action, sheetName, data, fileData }) 
+                    });
                     return await response.json();
                 } catch (err) { console.error("Err DB:", err); return null; }
             } else {
-                // MODE OFFLINE (LOCAL STORAGE FALLBACK) - Memastikan aplikasi 100% jalan tanpa disetup cloud.
+                // MODE OFFLINE (LOCAL STORAGE FALLBACK)
                 return new Promise(resolve => {
                     setTimeout(() => {
                         let db = JSON.parse(localStorage.getItem('corp_db')) || initialDummyData;
                         let sName = sheetName.toLowerCase();
                         
-                        if (action === 'uploadFile') {
-                            // Dummy respon offline agar tidak merusak storage dengan file base64 raksasa
-                            resolve({ status: 'success', url: 'https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder' });
-                            return;
+                        let dummyUrl = data ? (data.ktpUrl || "") : "";
+                        if (fileData) {
+                             dummyUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
+                             if(data) data.ktpUrl = dummyUrl;
                         }
 
                         if (action === 'getData') {
@@ -1226,14 +1240,14 @@ function deleteDataDynamically(ss, sheetName, id) {
                             if(!db[sName]) db[sName] = [];
                             db[sName].unshift(data); 
                             localStorage.setItem('corp_db', JSON.stringify(db));
-                            resolve({ status: 'success' });
+                            resolve({ status: 'success', url: dummyUrl });
                         } else if (action === 'updateData') {
                             if(db[sName]) {
                                 const idx = db[sName].findIndex(item => item.id === data.id);
                                 if(idx !== -1) db[sName][idx] = data;
                             }
                             localStorage.setItem('corp_db', JSON.stringify(db));
-                            resolve({ status: 'success' });
+                            resolve({ status: 'success', url: dummyUrl });
                         } else if (action === 'deleteData') { 
                             if(db[sName]) {
                                 db[sName] = db[sName].filter(item => item.id !== data);
@@ -1511,38 +1525,22 @@ function deleteDataDynamically(ss, sheetName, id) {
                 }
 
                 btnSubmit.disabled = true;
-                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
 
                 try {
                     const ktpFile = document.getElementById('inp-ktp').files[0];
-                    let ktpDriveUrl = "";
+                    let fileDataPayload = null;
 
                     if (ktpFile) {
-                        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengompres Foto...';
-                        
-                        if (!GAS_URL) {
-                            ktpDriveUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
-                            showToast('Offline Mode: Foto KTP tidak masuk ke Drive', 'warning');
-                        } else {
-                            // Menggunakan compressImage bukan getBase64 agar ukuran super kecil & cepat
-                            const base64Data = await compressImage(ktpFile);
-                            
-                            btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengupload ke Drive...';
-                            const uploadRes = await sendToSheet('uploadFile', '', {
-                                filename: "KTP_" + document.getElementById('inp-nama').value.replace(/\s+/g, '_') + ".jpg",
-                                mimeType: "image/jpeg",
-                                base64: base64Data
-                            });
-
-                            if (uploadRes && uploadRes.status === 'success') {
-                                ktpDriveUrl = uploadRes.url;
-                            } else {
-                                showToast('Gagal mengupload KTP. Lanjut menyimpan data tanpa foto.', 'error');
-                            }
-                        }
+                        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses Foto...';
+                        const base64Data = await compressImage(ktpFile);
+                        fileDataPayload = {
+                            filename: "KTP_" + document.getElementById('inp-nama').value.replace(/\s+/g, '_') + ".jpg",
+                            mimeType: "image/jpeg",
+                            base64: base64Data
+                        };
                     }
 
-                    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan Data...';
+                    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan ke Server...';
 
                     const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
                     const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
@@ -1563,11 +1561,17 @@ function deleteDataDynamically(ss, sheetName, id) {
                         tanggalGabung: document.getElementById('inp-joindate').value,
                         noRekening: handleLeadingZero(document.getElementById('inp-norek').value),
                         jatahCuti: Number(document.getElementById('inp-cuti').value) || 12,
-                        ktpUrl: ktpDriveUrl
+                        ktpUrl: "" // Akan diisi otomatis oleh backend
                     };
                     
+                    // ATOMIC ACTION: Mengirim Data Karyawan sekaligus Gambar ke Backend
+                    const res = await sendToSheet('addData', 'Karyawan', newEmp, fileDataPayload);
+                    
+                    if (res && res.url) {
+                        newEmp.ktpUrl = res.url; // Menangkap URL yang sukses digenerate backend
+                    }
+                    
                     state.karyawan.push(newEmp);
-                    await sendToSheet('addData', 'Karyawan', newEmp);
                     tambahLaporan('Karyawan Baru Terdaftar', `Menambahkan ${newEmp.nama} di ${getNamaCabang(selCabangId)}.`);
                     
                     closeModal();
@@ -1687,38 +1691,22 @@ function deleteDataDynamically(ss, sheetName, id) {
                 }
 
                 btnSubmit.disabled = true;
-                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
 
                 try {
                     const ktpFile = document.getElementById('edit-ktp').files[0];
-                    let ktpDriveUrl = emp.ktpUrl || "";
+                    let fileDataPayload = null;
 
                     if (ktpFile) {
-                        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengompres Foto...';
-                        
-                        if (!GAS_URL) {
-                            ktpDriveUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
-                            showToast('Offline Mode: Foto KTP tidak masuk ke Drive', 'warning');
-                        } else {
-                            // Menggunakan compressImage bukan getBase64
-                            const base64Data = await compressImage(ktpFile);
-                            
-                            btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Upload ke Drive...';
-                            const uploadRes = await sendToSheet('uploadFile', '', {
-                                filename: "KTP_UPDATE_" + document.getElementById('edit-nama').value.replace(/\s+/g, '_') + ".jpg",
-                                mimeType: "image/jpeg",
-                                base64: base64Data
-                            });
-
-                            if (uploadRes && uploadRes.status === 'success') {
-                                ktpDriveUrl = uploadRes.url;
-                            } else {
-                                showToast('Gagal mengupload KTP. Menyimpan perubahan lain.', 'error');
-                            }
-                        }
+                        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses Foto...';
+                        const base64Data = await compressImage(ktpFile);
+                        fileDataPayload = {
+                            filename: "KTP_UPDATE_" + document.getElementById('edit-nama').value.replace(/\s+/g, '_') + ".jpg",
+                            mimeType: "image/jpeg",
+                            base64: base64Data
+                        };
                     }
 
-                    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan Data...';
+                    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan Perubahan...';
 
                     const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
                     const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
@@ -1731,14 +1719,19 @@ function deleteDataDynamically(ss, sheetName, id) {
                     emp.username = usernameEdit;
                     emp.password = document.getElementById('edit-password').value;
                     emp.role = roleString;
-                    
                     emp.noTelp = handleLeadingZero(document.getElementById('edit-notelp').value);
                     emp.tanggalGabung = document.getElementById('edit-joindate').value;
                     emp.noRekening = handleLeadingZero(document.getElementById('edit-norek').value);
                     emp.jatahCuti = Number(document.getElementById('edit-cuti').value) || 0;
-                    emp.ktpUrl = ktpDriveUrl;
+                    emp.ktpUrl = emp.ktpUrl || "";
                     
-                    await sendToSheet('updateData', 'Karyawan', emp);
+                    // ATOMIC ACTION
+                    const res = await sendToSheet('updateData', 'Karyawan', emp, fileDataPayload);
+                    
+                    if (res && res.url) {
+                        emp.ktpUrl = res.url;
+                    }
+                    
                     tambahLaporan('Data Karyawan Diperbarui', `Mengubah data dari ${emp.nama}.`);
                     
                     closeModal();
