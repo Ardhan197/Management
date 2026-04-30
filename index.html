@@ -341,7 +341,7 @@
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <div>
                             <h3 class="text-xl font-bold text-slate-800">Manajemen Karyawan</h3>
-                            <p class="text-sm text-slate-500">Pusat kontrol data pegawai beserta kredensial login (username/password).</p>
+                            <p class="text-sm text-slate-500">Pusat kontrol data pegawai beserta kredensial login (username/password) dan foto KTP.</p>
                         </div>
                         <button id="btn-add-karyawan" onclick="openModalKaryawan()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 shadow-sm flex-shrink-0">
                             <i class="fa-solid fa-user-plus"></i> Tambah Pegawai
@@ -353,7 +353,7 @@
                                 <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
                                     <tr>
                                         <th class="px-6 py-4 font-medium">Karyawan & Lokasi</th>
-                                        <th class="px-6 py-4 font-medium">Jabatan</th>
+                                        <th class="px-6 py-4 font-medium">Jabatan & Dokumen</th>
                                         <th id="col-username-karyawan" class="px-6 py-4 font-medium">Akses Login</th>
                                         <th id="col-role-karyawan" class="px-6 py-4 font-medium">Tingkat Izin</th>
                                         <th class="px-6 py-4 font-medium">Status</th>
@@ -477,8 +477,8 @@
                     <div class="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 p-6 relative mb-8">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
-                                <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets)</h4>
-                                <p class="text-sm text-slate-400">Jika ingin beralih ke cloud database, salin dan tempel kode ini ke Google Apps Script Anda. <b>WAJIB LAKUKAN NEW DEPLOYMENT</b>.</p>
+                                <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets & Google Drive)</h4>
+                                <p class="text-sm text-slate-400">Jika ingin beralih ke cloud database, salin dan tempel kode ini ke Google Apps Script Anda. Kode ini mendukung otomatisasi penyimpanan foto KTP ke Google Drive. <b>WAJIB LAKUKAN NEW DEPLOYMENT</b>.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                                 <i class="fa-regular fa-copy"></i> Salin Kode
@@ -507,6 +507,23 @@ function doPost(e) {
     } else if (action === 'deleteData') {
       deleteDataDynamically(ss, payload.sheetName, payload.data);
       result.message = "Data berhasil dihapus dari database";
+    } else if (action === 'uploadFile') {
+      // Modul Simpan Foto KTP ke Google Drive
+      let folder;
+      const folderIter = DriveApp.getFoldersByName("ERP_KTP_Uploads");
+      if (folderIter.hasNext()) {
+        folder = folderIter.next();
+      } else {
+        folder = DriveApp.createFolder("ERP_KTP_Uploads");
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      }
+      
+      const blob = Utilities.newBlob(Utilities.base64Decode(payload.data.base64), payload.data.mimeType, payload.data.filename);
+      const file = folder.createFile(blob);
+      
+      // MENGEMBALIKAN DIRECT LINK AGAR BISA DITAMPILKAN DALAM TAG <img> HTML
+      result.url = "https://drive.google.com/uc?export=view&id=" + file.getId();
+      result.message = "File KTP berhasil diupload ke Drive";
     }
   } catch (error) {
     result = { status: 'error', message: error.toString() };
@@ -523,7 +540,7 @@ function setupDatabase(ss) {
   const tables = {
     'Cabang': ['id', 'namaCabang', 'lokasi', 'tipeCuti'],
     'Owner': ['id', 'nama', 'posisi', 'username', 'password'],
-    'Karyawan': ['id', 'nama', 'posisi', 'status', 'gajiPokok', 'tunjangan', 'username', 'password', 'role', 'cabangId', 'noTelp', 'tanggalGabung', 'noRekening', 'jatahCuti'],
+    'Karyawan': ['id', 'nama', 'posisi', 'status', 'gajiPokok', 'tunjangan', 'username', 'password', 'role', 'cabangId', 'noTelp', 'tanggalGabung', 'noRekening', 'jatahCuti', 'ktpUrl'],
     'Keuangan': ['id', 'tanggal', 'tipe', 'keterangan', 'nominal', 'statusTransaksi', 'cabangId'],
     'Laporan': ['id', 'waktu', 'judul', 'detail', 'cabangId'],
     'RiwayatPosisi': ['id', 'karyawanId', 'tanggal', 'posisiLama', 'posisiBaru', 'keterangan'],
@@ -714,7 +731,7 @@ function deleteDataDynamically(ss, sheetName, id) {
          * Kosongkan URL jika ingin menggunakan LocalStorage (Offline Mode).
          * Jika diisi, akan otomatis terhubung ke cloud Spreadsheet.
          */
-        const GAS_URL = 'https://st.google.com/macros/s/AKfycbysOgLAmryQF8GJNkxR-sQELEjDnrSeAisVJn8JRUIiuIJgnfYk9Q7dHA-zXaEz_tbp/exec'; 
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbysOgLAmryQF8GJNkxR-sQELEjDnrSeAisVJn8JRUIiuIJgnfYk9Q7dHA-zXaEz_tbp/exec'; 
 
         /**
          * DAFTAR FITUR & AKSES CHECKLIST
@@ -731,7 +748,7 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         let backgroundSyncInterval = null; 
 
-        // Fungsi Navigasi Tab Sidebar (Sebelumnya Hilang)
+        // Fungsi Navigasi Tab Sidebar
         function navigate(viewId, bypassState = false) {
             if (!viewId) return;
             if (state.currentView === viewId && !bypassState) return;
@@ -782,7 +799,7 @@ function deleteDataDynamically(ss, sheetName, id) {
             }
         }
 
-        // Fungsi Membuka / Menutup Sidebar di Mobile (Sebelumnya Hilang)
+        // Fungsi Membuka / Menutup Sidebar di Mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
@@ -1109,6 +1126,16 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         const getWaktuSekarang = () => { const d = new Date(); let hours = d.getHours(); let ampm = hours >= 12 ? 'PM' : 'AM'; hours = hours % 12 || 12; const mins = d.getMinutes().toString().padStart(2, '0'); return `Hari ini, ${hours}:${mins} ${ampm}`; };
 
+        // Helper Konversi Foto menjadi Base64
+        const getBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        };
+
         // --- FETCH DB LOKAL/CLOUD & BACKGROUND SYNC ---
         
         // Data Contoh Awal (Hanya dipanggil jika Local Storage kosong dan GAS_URL kosong)
@@ -1120,8 +1147,8 @@ function deleteDataDynamically(ss, sheetName, id) {
             ],
             owner: [{ id: 'OWN-1', nama: 'Super Admin', posisi: 'Owner', username: 'admin', password: '123', role: listAksesTersedia.map(f => f.id).join(',') }],
             karyawan: [
-                { id: 'EMP-001', nama: 'Budi Santoso', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12 },
-                { id: 'EMP-002', nama: 'Siti Aminah', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12 }
+                { id: 'EMP-001', nama: 'Budi Santoso', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12, ktpUrl: '' },
+                { id: 'EMP-002', nama: 'Siti Aminah', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12, ktpUrl: '' }
             ],
             keuangan: [
                  { id: 'TRX-001', tanggal: '2023-10-01', tipe: 'Pemasukan', keterangan: 'Penjualan Produk A', nominal: 15000000, statusTransaksi: 'Selesai', cabangId: 'CAB-001' },
@@ -1147,6 +1174,12 @@ function deleteDataDynamically(ss, sheetName, id) {
                         let db = JSON.parse(localStorage.getItem('corp_db')) || initialDummyData;
                         let sName = sheetName.toLowerCase();
                         
+                        if (action === 'uploadFile') {
+                            // Dummy respon offline agar tidak merusak storage dengan file base64 raksasa
+                            resolve({ status: 'success', url: 'https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder' });
+                            return;
+                        }
+
                         if (action === 'getData') {
                             resolve({ status: 'success', data: db });
                         } else if (action === 'addData') {
@@ -1364,6 +1397,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div class="space-y-3">
                             <h4 class="font-bold text-slate-700 border-b border-slate-100 pb-2"><i class="fa-solid fa-address-card text-blue-600 mr-2"></i> Profil & Personal</h4>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Upload Foto KTP</label>
+                            <input type="file" id="inp-ktp" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none"></div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Penempatan Cabang</label>
                             <select id="inp-cabang" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none ${!state.isOwner ? 'bg-slate-100 cursor-not-allowed' : ''}" ${!state.isOwner ? 'disabled' : ''}>
                                 ${selectCabangOpts}
@@ -1416,49 +1451,88 @@ function deleteDataDynamically(ss, sheetName, id) {
 
                     <div class="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-2">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium text-sm">Batal</button>
-                        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm shadow-sm">Simpan Karyawan</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm shadow-sm flex items-center gap-2">
+                            <span>Simpan Karyawan</span>
+                        </button>
                     </div>
                 </form>
             `;
             openModal('Tambah Data Pegawai Cabang', formHTML);
 
-            document.getElementById('form-karyawan').onsubmit = (e) => {
+            document.getElementById('form-karyawan').onsubmit = async (e) => {
                 e.preventDefault();
-                const username = document.getElementById('inp-username').value;
                 
+                const btnSubmit = e.target.querySelector('button[type="submit"]');
+                const btnTextHtml = btnSubmit.innerHTML;
+                
+                const username = document.getElementById('inp-username').value;
                 if (username && state.karyawan.some(a => String(a.username) === String(username))) {
                     return showToast('Username persis ini sudah dipakai karyawan lain!', 'warning');
                 }
 
-                const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
-                const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
 
-                const selCabangId = document.getElementById('inp-cabang').value || state.activeCabangFilter;
+                try {
+                    const ktpFile = document.getElementById('inp-ktp').files[0];
+                    let ktpDriveUrl = "";
 
-                const newEmp = {
-                    id: generateEmployeeId(), 
-                    nama: document.getElementById('inp-nama').value,
-                    posisi: document.getElementById('inp-posisi').value,
-                    gajiPokok: Number(document.getElementById('inp-gaji').value.replace(/\./g, '')),
-                    tunjangan: Number(document.getElementById('inp-tunj').value.replace(/\./g, '')),
-                    status: document.getElementById('inp-status').value,
-                    username: username,
-                    password: document.getElementById('inp-password').value,
-                    role: roleString,
-                    cabangId: selCabangId,
-                    noTelp: handleLeadingZero(document.getElementById('inp-notelp').value),
-                    tanggalGabung: document.getElementById('inp-joindate').value,
-                    noRekening: handleLeadingZero(document.getElementById('inp-norek').value),
-                    jatahCuti: Number(document.getElementById('inp-cuti').value) || 12
-                };
-                
-                state.karyawan.push(newEmp);
-                sendToSheet('addData', 'Karyawan', newEmp);
-                tambahLaporan('Karyawan Baru Terdaftar', `Menambahkan ${newEmp.nama} di ${getNamaCabang(selCabangId)}.`);
-                
-                closeModal();
-                showToast('Data berhasil disimpan!', 'success');
-                renderData();
+                    if (ktpFile) {
+                        showToast('Mengupload Foto KTP...', 'info');
+                        if (!GAS_URL) {
+                            ktpDriveUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
+                            showToast('Offline Mode: Foto KTP tidak masuk ke Drive', 'warning');
+                        } else {
+                            const base64Data = await getBase64(ktpFile);
+                            const uploadRes = await sendToSheet('uploadFile', '', {
+                                filename: "KTP_" + document.getElementById('inp-nama').value.replace(/\s+/g, '_') + "_" + ktpFile.name,
+                                mimeType: ktpFile.type,
+                                base64: base64Data
+                            });
+
+                            if (uploadRes && uploadRes.status === 'success') {
+                                ktpDriveUrl = uploadRes.url;
+                            } else {
+                                showToast('Gagal mengupload KTP. Lanjut menyimpan data tanpa foto.', 'error');
+                            }
+                        }
+                    }
+
+                    const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
+                    const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
+                    const selCabangId = document.getElementById('inp-cabang').value || state.activeCabangFilter;
+
+                    const newEmp = {
+                        id: generateEmployeeId(), 
+                        nama: document.getElementById('inp-nama').value,
+                        posisi: document.getElementById('inp-posisi').value,
+                        gajiPokok: Number(document.getElementById('inp-gaji').value.replace(/\./g, '')),
+                        tunjangan: Number(document.getElementById('inp-tunj').value.replace(/\./g, '')),
+                        status: document.getElementById('inp-status').value,
+                        username: username,
+                        password: document.getElementById('inp-password').value,
+                        role: roleString,
+                        cabangId: selCabangId,
+                        noTelp: handleLeadingZero(document.getElementById('inp-notelp').value),
+                        tanggalGabung: document.getElementById('inp-joindate').value,
+                        noRekening: handleLeadingZero(document.getElementById('inp-norek').value),
+                        jatahCuti: Number(document.getElementById('inp-cuti').value) || 12,
+                        ktpUrl: ktpDriveUrl
+                    };
+                    
+                    state.karyawan.push(newEmp);
+                    await sendToSheet('addData', 'Karyawan', newEmp);
+                    tambahLaporan('Karyawan Baru Terdaftar', `Menambahkan ${newEmp.nama} di ${getNamaCabang(selCabangId)}.`);
+                    
+                    closeModal();
+                    showToast('Data Karyawan berhasil disimpan!', 'success');
+                    renderData();
+                } catch (err) {
+                    showToast('Terjadi kesalahan saat memproses data!', 'error');
+                } finally {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = btnTextHtml;
+                }
             };
         }
 
@@ -1474,11 +1548,25 @@ function deleteDataDynamically(ss, sheetName, id) {
             const cleanTelp = emp.noTelp ? String(emp.noTelp).replace(/^'/, '') : '';
             const cleanRek = emp.noRekening ? String(emp.noRekening).replace(/^'/, '') : '';
 
+            // Tampilkan Gambar KTP jika URL Tersedia
+            const ktpPreviewUI = emp.ktpUrl 
+                ? `<div class="mt-3 relative inline-block group">
+                     <p class="text-xs font-semibold text-slate-500 mb-1">KTP Tersimpan:</p>
+                     <img src="${emp.ktpUrl}" alt="KTP Preview" class="h-28 w-auto rounded-lg border border-slate-300 shadow-sm object-cover transition-transform group-hover:scale-105">
+                     <a href="${emp.ktpUrl}" target="_blank" title="Lihat ukuran penuh" class="absolute -top-2 -right-2 bg-white text-blue-600 rounded-full w-7 h-7 flex items-center justify-center shadow-md border border-slate-100 hover:text-blue-800 hover:bg-slate-50 transition-colors">
+                        <i class="fa-solid fa-expand text-xs"></i>
+                     </a>
+                   </div>` 
+                : `<p class="text-xs text-slate-400 mt-2">Belum ada KTP yang tersimpan.</p>`;
+
             const formHTML = `
                 <form id="form-edit-karyawan" class="space-y-4">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div class="space-y-3">
                             <h4 class="font-bold text-slate-700 border-b border-slate-100 pb-2"><i class="fa-solid fa-address-card text-blue-600 mr-2"></i> Profil & Personal</h4>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Ganti Foto KTP</label>
+                            <input type="file" id="edit-ktp" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none">
+                            ${ktpPreviewUI}</div>
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Penempatan Cabang</label>
                             <select id="edit-cabang" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none ${!state.isOwner ? 'bg-slate-100 cursor-not-allowed' : ''}" ${!state.isOwner ? 'disabled' : ''}>
                                 ${selectCabangOpts}
@@ -1533,48 +1621,87 @@ function deleteDataDynamically(ss, sheetName, id) {
 
                     <div class="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-2">
                         <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium text-sm">Batal</button>
-                        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm shadow-sm">Simpan Perubahan</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm shadow-sm flex items-center gap-2">
+                            <span>Simpan Perubahan</span>
+                        </button>
                     </div>
                 </form>
             `;
             openModal('Edit Karyawan & Akses', formHTML);
 
-            document.getElementById('form-edit-karyawan').onsubmit = (e) => {
+            document.getElementById('form-edit-karyawan').onsubmit = async (e) => {
                 e.preventDefault();
+                
+                const btnSubmit = e.target.querySelector('button[type="submit"]');
+                const btnTextHtml = btnSubmit.innerHTML;
 
                 const usernameEdit = document.getElementById('edit-username').value;
-                
                 if (usernameEdit && state.karyawan.some(a => a.id !== emp.id && String(a.username) === String(usernameEdit))) {
                     return showToast('Username persis ini sudah dipakai karyawan lain!', 'warning');
                 }
 
-                const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
-                const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
 
-                emp.cabangId = document.getElementById('edit-cabang').value || emp.cabangId;
-                emp.nama = document.getElementById('edit-nama').value;
-                emp.gajiPokok = Number(document.getElementById('edit-gaji').value.replace(/\./g, ''));
-                emp.tunjangan = Number(document.getElementById('edit-tunj').value.replace(/\./g, ''));
-                emp.status = document.getElementById('edit-status').value;
-                emp.username = usernameEdit;
-                emp.password = document.getElementById('edit-password').value;
-                emp.role = roleString;
-                
-                emp.noTelp = handleLeadingZero(document.getElementById('edit-notelp').value);
-                emp.tanggalGabung = document.getElementById('edit-joindate').value;
-                emp.noRekening = handleLeadingZero(document.getElementById('edit-norek').value);
-                emp.jatahCuti = Number(document.getElementById('edit-cuti').value) || 0;
-                
-                sendToSheet('updateData', 'Karyawan', emp);
-                tambahLaporan('Data Karyawan Diperbarui', `Mengubah data dari ${emp.nama}.`);
-                
-                closeModal();
-                showToast('Perubahan berhasil disimpan!', 'success');
-                
-                if (emp.id === state.loggedInUserId) {
-                    applyUserLogin(emp); 
+                try {
+                    const ktpFile = document.getElementById('edit-ktp').files[0];
+                    let ktpDriveUrl = emp.ktpUrl || "";
+
+                    if (ktpFile) {
+                        showToast('Memperbarui KTP di Google Drive...', 'info');
+                        if (!GAS_URL) {
+                            ktpDriveUrl = "https://dummyimage.com/600x400/000/fff&text=Offline+KTP+Placeholder";
+                            showToast('Offline Mode: Foto KTP tidak masuk ke Drive', 'warning');
+                        } else {
+                            const base64Data = await getBase64(ktpFile);
+                            const uploadRes = await sendToSheet('uploadFile', '', {
+                                filename: "KTP_UPDATE_" + document.getElementById('edit-nama').value.replace(/\s+/g, '_') + "_" + ktpFile.name,
+                                mimeType: ktpFile.type,
+                                base64: base64Data
+                            });
+
+                            if (uploadRes && uploadRes.status === 'success') {
+                                ktpDriveUrl = uploadRes.url;
+                            } else {
+                                showToast('Gagal mengupload KTP. Menyimpan perubahan lain.', 'error');
+                            }
+                        }
+                    }
+
+                    const checkboxes = document.querySelectorAll('.akses-checkbox:checked');
+                    const roleString = Array.from(checkboxes).map(cb => cb.value).join(',');
+
+                    emp.cabangId = document.getElementById('edit-cabang').value || emp.cabangId;
+                    emp.nama = document.getElementById('edit-nama').value;
+                    emp.gajiPokok = Number(document.getElementById('edit-gaji').value.replace(/\./g, ''));
+                    emp.tunjangan = Number(document.getElementById('edit-tunj').value.replace(/\./g, ''));
+                    emp.status = document.getElementById('edit-status').value;
+                    emp.username = usernameEdit;
+                    emp.password = document.getElementById('edit-password').value;
+                    emp.role = roleString;
+                    
+                    emp.noTelp = handleLeadingZero(document.getElementById('edit-notelp').value);
+                    emp.tanggalGabung = document.getElementById('edit-joindate').value;
+                    emp.noRekening = handleLeadingZero(document.getElementById('edit-norek').value);
+                    emp.jatahCuti = Number(document.getElementById('edit-cuti').value) || 0;
+                    emp.ktpUrl = ktpDriveUrl;
+                    
+                    await sendToSheet('updateData', 'Karyawan', emp);
+                    tambahLaporan('Data Karyawan Diperbarui', `Mengubah data dari ${emp.nama}.`);
+                    
+                    closeModal();
+                    showToast('Perubahan berhasil disimpan!', 'success');
+                    
+                    if (emp.id === state.loggedInUserId) {
+                        applyUserLogin(emp); 
+                    }
+                    renderData();
+                } catch (err) {
+                    showToast('Terjadi kesalahan saat memproses data!', 'error');
+                } finally {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = btnTextHtml;
                 }
-                renderData();
             };
         }
 
@@ -1993,6 +2120,9 @@ function deleteDataDynamically(ss, sheetName, id) {
                         else if(aksesList.length > 0) { badgeStr = "Staff"; bClass = "bg-blue-100 text-blue-700"; }
                     }
 
+                    // Tampilkan Link Langsung Menuju Gambar di Tabel Karyawan
+                    const ktpLinkHtml = emp.ktpUrl ? `<br/><a href="${emp.ktpUrl}" target="_blank" class="text-[10px] text-blue-500 hover:underline flex items-center gap-1 mt-1"><i class="fa-solid fa-id-card"></i> Lihat Foto KTP</a>` : '';
+
                     return `
                     <tr class="hover:bg-slate-50 transition-colors group">
                         <td class="px-6 py-4 flex items-center gap-3">
@@ -2003,7 +2133,7 @@ function deleteDataDynamically(ss, sheetName, id) {
                                 <div class="text-xs text-emerald-600 mt-0.5"><i class="fa-solid fa-location-dot"></i> ${getNamaCabang(emp.cabangId)}</div>
                             </div>
                         </td>
-                        <td class="px-6 py-4"><div>${emp.posisi}</div></td>
+                        <td class="px-6 py-4"><div>${emp.posisi}${ktpLinkHtml}</div></td>
                         <td class="px-6 py-4" style="display: ${canEdit ? 'table-cell' : 'none'}">
                             ${isHasLogin ? `<span class="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${emp.username}</span>` : `<span class="text-xs text-slate-400 italic">-</span>`}
                         </td>
