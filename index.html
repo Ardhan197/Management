@@ -341,7 +341,7 @@
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <div>
                             <h3 class="text-xl font-bold text-slate-800">Manajemen Karyawan</h3>
-                            <p class="text-sm text-slate-500">Pusat kontrol data pegawai beserta kredensial login (username/password) dan foto KTP.</p>
+                            <p class="text-sm text-slate-500">Pusat kontrol data pegawai beserta kredensial login (username/password) dan foto profil & KTP.</p>
                         </div>
                         <button id="btn-add-karyawan" onclick="openModalKaryawan()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 shadow-sm flex-shrink-0">
                             <i class="fa-solid fa-user-plus"></i> Tambah Pegawai
@@ -478,7 +478,7 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <div>
                                 <h4 class="font-bold text-white mb-1">Kode App Script (Backend Google Sheets & Google Drive)</h4>
-                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui (Support Multi-File)</b> untuk mendukung Foto Profil & KTP! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
+                                <p class="text-sm text-slate-400">Kode backend telah <b>diperbarui (Support Multi-File terpisah folder)</b> untuk memisahkan Foto Profil & KTP! Salin ulang dan buat <b>New Deployment</b> pada Google Apps Script Anda.</p>
                             </div>
                             <button onclick="copyAppScript()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                                 <i class="fa-regular fa-copy"></i> Salin Kode Baru
@@ -501,7 +501,7 @@ function doPost(e) {
       // MULTI-FILE UPLOAD LOGIC
       if (payload.filesData && payload.filesData.length > 0) {
          payload.filesData.forEach(item => {
-             let fileUrl = uploadToDrive(item.fileData);
+             let fileUrl = uploadToDrive(item.fileData, item.field);
              payload.data[item.field] = fileUrl; // Otomatis disisipkan ke data sebelum di-save!
          });
       }
@@ -514,7 +514,7 @@ function doPost(e) {
       
       if (payload.filesData && payload.filesData.length > 0) {
          payload.filesData.forEach(item => {
-             let fileUrl = uploadToDrive(item.fileData);
+             let fileUrl = uploadToDrive(item.fileData, item.field);
              payload.data[item.field] = fileUrl; 
          });
       }
@@ -537,13 +537,15 @@ function doGet(e) {
   return ContentService.createTextOutput("API Database Aktif. Multi-File & Multi-Cabang Siap.").setMimeType(ContentService.MimeType.TEXT);
 }
 
-function uploadToDrive(fileData) {
+function uploadToDrive(fileData, fieldType) {
+  // Folder akan dipisah sesuai jenis gambar
+  let folderName = fieldType === 'fotoProfilUrl' ? "ERP_FotoProfil" : "ERP_KTP_Uploads";
   let folder;
-  const folderIter = DriveApp.getFoldersByName("ERP_Uploads");
+  const folderIter = DriveApp.getFoldersByName(folderName);
   if (folderIter.hasNext()) {
     folder = folderIter.next();
   } else {
-    folder = DriveApp.createFolder("ERP_Uploads");
+    folder = DriveApp.createFolder(folderName);
     folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   }
   
@@ -772,6 +774,7 @@ function deleteDataDynamically(ss, sheetName, id) {
          * DAFTAR FITUR & AKSES CHECKLIST
          */
         const listAksesTersedia = [
+            { id: 'view_all_branch', label: 'Hak Manajerial (Lihat Data Seluruh Cabang)' },
             { id: 'dashboard', label: 'Dashboard & Statistik' },
             { id: 'karyawan', label: 'Manajemen Karyawan' },
             { id: 'gaji', label: 'Proses Penggajian' },
@@ -891,9 +894,35 @@ function deleteDataDynamically(ss, sheetName, id) {
             return state.karyawan.find(k => k.id === state.loggedInUserId);
         }
 
-        function getFilteredData(dataArray) {
-            if (state.activeCabangFilter === 'ALL') return dataArray;
-            return dataArray.filter(item => item.cabangId === state.activeCabangFilter || !item.cabangId); 
+        function getFilteredData(dataArray, type) {
+            let filtered = dataArray;
+
+            // Filter by Cabang
+            if (state.activeCabangFilter !== 'ALL') {
+                filtered = filtered.filter(item => item.cabangId === state.activeCabangFilter || !item.cabangId); 
+            }
+
+            // Filter Personal vs Managerial (Untuk Non-Owner)
+            if (!state.isOwner) {
+                const user = getCurrentUser();
+                if (user) {
+                    const arrAkses = getAccessArray(user.role);
+                    const isManagerial = arrAkses.includes('view_all_branch');
+                    
+                    if (!isManagerial) {
+                        // Karyawan Biasa / Akses Personal
+                        if (type === 'karyawan' || type === 'gaji') {
+                            filtered = filtered.filter(item => item.id === user.id);
+                        } else if (type === 'keuangan') {
+                            filtered = []; // Tidak bisa lihat keuangan cabang sama sekali
+                        } else if (type === 'laporan') {
+                            filtered = filtered.filter(l => String(l.detail).includes('|' + user.id + '|') || String(l.detail).includes(user.nama));
+                        }
+                    }
+                }
+            }
+
+            return filtered;
         }
         
         function getNamaCabang(idCabang) {
@@ -965,9 +994,16 @@ function deleteDataDynamically(ss, sheetName, id) {
         function applyUserLogin(user) {
             const arrAkses = getAccessArray(user.role);
             
-            let badgeText = state.isOwner ? "Owner / Super Admin" : "Karyawan Terbatas";
-            let badgeColor = state.isOwner ? "text-emerald-400" : "text-amber-400";
-            if (!state.isOwner && arrAkses.length >= listAksesTersedia.length - 2) { badgeText = "Manajer Cabang"; badgeColor = "text-blue-400"; }
+            let badgeText = state.isOwner ? "Owner / Super Admin" : "Karyawan Biasa";
+            let badgeColor = state.isOwner ? "text-emerald-400" : "text-slate-400";
+            
+            if (!state.isOwner && arrAkses.includes('view_all_branch')) { 
+                badgeText = "Manajer / Admin Cabang"; 
+                badgeColor = "text-blue-400"; 
+            } else if (!state.isOwner) {
+                badgeText = "Karyawan / Personal";
+                badgeColor = "text-amber-400";
+            }
 
             document.getElementById('user-name').innerText = user.nama || 'Pengguna';
             document.getElementById('user-role-badge').innerText = badgeText;
@@ -998,7 +1034,7 @@ function deleteDataDynamically(ss, sheetName, id) {
 
             if (arrAkses.length > 0) {
                 if (arrAkses.includes('dashboard')) navigate('dashboard', true);
-                else navigate(listAksesTersedia.find(f => arrAkses.includes(f.id) && f.id !== 'can_edit')?.id, true);
+                else navigate(listAksesTersedia.find(f => arrAkses.includes(f.id) && f.id !== 'can_edit' && f.id !== 'view_all_branch')?.id, true);
             }
             
             applyAccessRestrictions();
@@ -1317,8 +1353,8 @@ function deleteDataDynamically(ss, sheetName, id) {
             ],
             owner: [{ id: 'OWN-1', nama: 'Super Admin', posisi: 'Owner', username: 'admin', password: '123', role: listAksesTersedia.map(f => f.id).join(',') }],
             karyawan: [
-                { id: 'EMP-001', nama: 'Budi Santoso', nik: '3171234567890001', jenisKelamin: 'Laki-laki', tempatLahir: 'Jakarta', tanggalLahir: '1990-05-15', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12, ktpUrl: '', fotoProfilUrl: '' },
-                { id: 'EMP-002', nama: 'Siti Aminah', nik: '3171234567890002', jenisKelamin: 'Perempuan', tempatLahir: 'Bandung', tanggalLahir: '1995-10-20', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12, ktpUrl: '', fotoProfilUrl: '' }
+                { id: 'EMP-001', nama: 'Budi Santoso', nik: '3171234567890001', jenisKelamin: 'Laki-laki', tempatLahir: 'Jakarta', tanggalLahir: '1990-05-15', posisi: 'Manager Area', status: 'Aktif', gajiPokok: 5000000, tunjangan: 1500000, username: 'budi', password: '123', role: 'view_all_branch,dashboard,karyawan,gaji,keuangan,can_edit', cabangId: 'CAB-001', noTelp: '08123456789', tanggalGabung: '2023-01-10', noRekening: '12345678', jatahCuti: 12, ktpUrl: '', fotoProfilUrl: '' },
+                { id: 'EMP-002', nama: 'Siti Aminah', nik: '3171234567890002', jenisKelamin: 'Perempuan', tempatLahir: 'Bandung', tanggalLahir: '1995-10-20', posisi: 'Staff Keuangan', status: 'Aktif', gajiPokok: 4000000, tunjangan: 1000000, username: 'siti', password: '123', role: 'dashboard,keuangan,karyawan', cabangId: 'CAB-001', noTelp: '08987654321', tanggalGabung: '2023-03-15', noRekening: '87654321', jatahCuti: 12, ktpUrl: '', fotoProfilUrl: '' }
             ],
             keuangan: [
                  { id: 'TRX-001', tanggal: '2023-10-01', tipe: 'Pemasukan', keterangan: 'Penjualan Produk A', nominal: 15000000, statusTransaksi: 'Selesai', cabangId: 'CAB-001' },
@@ -1576,10 +1612,10 @@ function deleteDataDynamically(ss, sheetName, id) {
                             
                             <div class="grid grid-cols-2 gap-3">
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Upload Foto Profil</label>
-                                <input type="file" id="inp-foto" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none"></div>
+                                <input type="file" id="inp-foto" accept="image/*" capture="user" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none"></div>
                                 
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Upload KTP</label>
-                                <input type="file" id="inp-ktp" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none"></div>
+                                <input type="file" id="inp-ktp" accept="image/*" capture="environment" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none"></div>
                             </div>
 
                             <div><label class="block text-sm font-medium text-slate-700 mb-1">Penempatan Cabang</label>
@@ -1791,11 +1827,11 @@ function deleteDataDynamically(ss, sheetName, id) {
                             
                             <div class="grid grid-cols-2 gap-3">
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Ganti Foto Profil</label>
-                                <input type="file" id="edit-foto" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none">
+                                <input type="file" id="edit-foto" accept="image/*" capture="user" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none">
                                 ${fotoPreviewUI}</div>
                                 
                                 <div><label class="block text-sm font-medium text-slate-700 mb-1">Ganti Foto KTP</label>
-                                <input type="file" id="edit-ktp" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none">
+                                <input type="file" id="edit-ktp" accept="image/*" capture="environment" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 outline-none">
                                 ${ktpPreviewUI}</div>
                             </div>
 
@@ -2340,9 +2376,9 @@ function deleteDataDynamically(ss, sheetName, id) {
                     state.cabang.map(c => `<option value="${c.id}" ${state.activeCabangFilter === c.id ? 'selected' : ''}>${c.namaCabang}</option>`).join('');
             }
 
-            const fKaryawan = getFilteredData(state.karyawan);
-            const fKeuangan = getFilteredData(state.keuangan);
-            const fLaporan = getFilteredData(state.laporan);
+            const fKaryawan = getFilteredData(state.karyawan, 'karyawan');
+            const fKeuangan = getFilteredData(state.keuangan, 'keuangan');
+            const fLaporan = getFilteredData(state.laporan, 'laporan');
 
             // Update Notification Badge
             updateNotifBadge();
@@ -2380,8 +2416,8 @@ function deleteDataDynamically(ss, sheetName, id) {
                     let badgeStr = "Tanpa Akses";
                     let bClass = "bg-slate-100 text-slate-500";
                     if(isHasLogin) {
-                        if(aksesList.length >= listAksesTersedia.length - 1) { badgeStr = "Manajer"; bClass = "bg-emerald-100 text-emerald-700"; }
-                        else if(aksesList.length > 0) { badgeStr = "Staff"; bClass = "bg-blue-100 text-blue-700"; }
+                        if(aksesList.includes('view_all_branch')) { badgeStr = "Manajer"; bClass = "bg-emerald-100 text-emerald-700"; }
+                        else if(aksesList.length > 0) { badgeStr = "Staff / Personal"; bClass = "bg-blue-100 text-blue-700"; }
                     }
 
                     const ktpDisplayUrl = fixDriveUrl(emp.ktpUrl);
@@ -2753,7 +2789,7 @@ function deleteDataDynamically(ss, sheetName, id) {
 
         function updateChart() {
             if(!state.chartInstance) return;
-            const fKeuangan = getFilteredData(state.keuangan);
+            const fKeuangan = getFilteredData(state.keuangan, 'keuangan');
             let inTotal = 0, outTotal = 0;
             fKeuangan.forEach(k => { if(k.tipe === 'Pemasukan') inTotal += k.nominal; else outTotal += k.nominal; });
             state.chartInstance.data.datasets[0].data = [inTotal];
